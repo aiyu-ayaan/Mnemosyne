@@ -12,6 +12,11 @@
     "dev": "pnpm --filter @mnemosyne/desktop dev",
     "dev:backend": "pnpm --filter @mnemosyne/backend dev",
     "build:backend": "pnpm --filter @mnemosyne/backend build",
+    "stop": ".\\bin\\mnemosyne.exe service stop",
+    "doctor": ".\\bin\\mnemosyne.exe doctor",
+    "mcp:tools": "pnpm build:backend && .\\bin\\mnemosyne.exe tools",
+    "mcp:instructions": "pnpm build:backend && .\\bin\\mnemosyne.exe tools --full",
+    "mcp:call": "pnpm build:backend && .\\bin\\mnemosyne.exe call",
     "install:mcp": ".\\bin\\mnemosyne.exe install",
     "setup:codex": "codex mcp add mnemosyne -- \".\\bin\\mnemosyne.exe\" serve",
     "setup:claude": "claude mcp add mnemosyne -- \".\\bin\\mnemosyne.exe\" serve"

@@ -31,8 +31,11 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Unit tests
 - [x] **1.4 MCP server** — stdio JSON-RPC via the official Go SDK
   - [x] Tools: `list_projects`, `list_memories`, `read_memory`, `write_memory`,
-        `delete_memory`, `search_memories`
+        `delete_memory`, `search_memories`, `recall`, `read_backlinks`
   - [x] Tool-level tests driving a real server over an in-memory transport
+  - [x] Discoverability: server `instructions`, tool titles and annotations, so
+        agents reach for Mnemosyne without being told to
+  - [x] `mnemosyne tools` / `mnemosyne call` for driving tools by hand
 - [x] **1.5 CLI + config** — `serve`, `doctor`, `root`, `version`; root
       resolution (flag → env → config file → OS default dir)
 - [x] **1.6 Portable mode + install** — see [`devdocs/deployment.md`](devdocs/deployment.md)

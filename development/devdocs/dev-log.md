@@ -3,6 +3,52 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 11 — MCP discoverability, a dev loop, and the search bug behind both
+
+Agents could not find their way around the server, and the user had to name it
+in every session. Three things were wrong, and the third was the real one.
+
+**The server never said what it was for.** Eight tool names, an empty
+`instructions` field. Filled it: when to recall unprompted, when to write, the
+four-memory project convention (`todo`, `decisions`, `conventions`, `dev-log`),
+and which tool to pick. Added `title` and annotations to every tool — reads are
+read-only and idempotent so clients can auto-approve, `delete_memory` is
+destructive so it prompts. `TestDiscoverability` pins it, because it is easy to
+drop when editing tool definitions. See [`mcp-tools.md`](mcp-tools.md).
+
+**No way to exercise a tool without an agent.** Added `mnemosyne tools` and
+`mnemosyne call <tool> '<json>'`, both going through the real MCP server over an
+in-memory transport, so what they print is what the agent gets. Root scripts:
+`pnpm mcp:tools`, `pnpm mcp:instructions`, `pnpm mcp:call`, `pnpm stop`,
+`pnpm doctor`.
+
+**Natural-language search returned nothing.** The real reason the server looked
+broken. Search passed the query to FTS5 raw, and FTS5 ANDs its terms, so "how
+should I write commit messages" required every one of those words to appear in a
+memory. It matched nothing and returned an empty result with no error. `recall`
+is built on the same path, so its default mode was silently empty for exactly
+the phrasing agents use — single-word queries worked, which is why it looked
+like it worked at all. The raw query still goes first so `NEAR`, `prefix*`, and
+an explicit `OR` keep working; when it comes back empty, or is not valid FTS5 at
+all, it is retried as quoted terms joined with `OR` and ranked by bm25.
+
+Two more found by running every tool end to end against a real store:
+
+- `write_memory` rejected a slug that did not exist yet, so the convention the
+  instructions describe failed on its first write. A named slug is now a create.
+- `read_backlinks` returned zero-valued timestamps: the index query never
+  selected the `created`/`updated` columns it already stored.
+
+**Verified with:** `pnpm test` (all packages), plus every tool driven through
+`mnemosyne call` against the real memory root — write, create-at-slug, update,
+list, search, recall in all three modes, backlinks, read, delete, read-after-delete.
+Semantic mode errors without a local embedding provider, which is expected and
+explicit; hybrid falls back to text.
+
+**Left undone:** recall ranking is bm25-only without an embedding provider
+running, so results are ordered but not sharply. `development/` is documented in
+`Commit.md` as a submodule; it is currently plain tracked files in the main repo.
+
 ## Stage 10 — UI/UX overhaul and multi-theme system
 
 Complete UI overhaul implementing `/ui-ux-pro-max` guidelines and a 6-theme system:
