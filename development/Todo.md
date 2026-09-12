@@ -35,7 +35,14 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Tool-level tests driving a real server over an in-memory transport
 - [x] **1.5 CLI + config** — `serve`, `doctor`, `root`, `version`; root
       resolution (flag → env → config file → OS default dir)
-- [ ] **1.6 Docs + release** — README, install and MCP wiring instructions for
+- [ ] **1.6 Portable mode + install** — see [`devdocs/deployment.md`](devdocs/deployment.md)
+  - [ ] Portable mode: `mnemosyne.portable` marker or `--portable`, everything
+        beside the binary, nothing written outside its own folder
+  - [ ] `mnemosyne install` / `uninstall`, per-user by default, no admin needed
+  - [ ] PATH registration: `HKCU\Environment` on Windows, `~/.local/bin` symlink
+        on Unix; `--machine` for the system PATH, the only path needing admin
+  - [ ] Logon autostart: Scheduled Task, LaunchAgent, or `systemd --user`
+- [ ] **1.7 Docs + release** — README, install and MCP wiring instructions for
       Claude Code and Codex, `devdocs` refresh
 
 **MVP done when:** `claude mcp add mnemosyne -- mnemosyne serve` gives an agent
@@ -43,18 +50,24 @@ working memory that survives restarts, and the files are legible in any editor.
 
 ---
 
-## Phase 2 — REST API + desktop shell
+## Phase 2 — Daemon, local channel, and the desktop shell
 
-The GUI needs a transport; the transport needs a reason to exist. Both land here.
+The GUI needs a transport; the transport needs a reason to exist. The daemon
+needs a client. All three land together — a background service with nothing able
+to talk to it is a process that burns memory and does nothing.
 
-- [ ] **2.1 REST API** — same core, HTTP surface: projects, memories, search
-- [ ] **2.2 SSE** — push index/file changes to connected clients
-- [ ] **2.3 File watcher** — external edits (an agent, an editor, git) reindex live
-- [ ] **2.4 Electron + React + TS + Vite + Tailwind shell**
-- [ ] **2.5 VS Code–style layout** — see [`devdocs/ui-design.md`](devdocs/ui-design.md):
+- [ ] **2.1 API surface** — same core, JSON: projects, memories, search
+- [ ] **2.2 Local channel** — named pipe on Windows, unix socket elsewhere; no
+      TCP port, OS permissions as the boundary, token file as defence in depth
+- [ ] **2.3 `mnemosyne daemon`** — long-running, serves the channel, per-user
+- [ ] **2.4 `service status|start|stop`** — manage the logon task from the CLI
+- [ ] **2.5 Change events** — push index and file changes to connected clients
+- [ ] **2.6 File watcher** — external edits (an agent, an editor, git) reindex live
+- [ ] **2.7 Electron + React + TS + Vite + Tailwind shell**
+- [ ] **2.8 VS Code–style layout** — see [`devdocs/ui-design.md`](devdocs/ui-design.md):
       activity bar, collapsible sidebar, editor tabs, bottom panel, status bar, dark-first
-- [ ] **2.6 Memory editor** — Markdown editing with frontmatter form
-- [ ] **2.7 Settings** — configurable memory root, matching the backend's config
+- [ ] **2.9 Memory editor** — Markdown editing with frontmatter form
+- [ ] **2.10 Settings** — configurable memory root, matching the backend's config
 
 ---
 
@@ -99,9 +112,11 @@ The GUI needs a transport; the transport needs a reason to exist. Both land here
 ## Phase 7 — Distribution
 
 - [ ] **7.1 Cross-platform builds** — Windows, macOS, Linux
-- [ ] **7.2 Packaged desktop app** — backend binary bundled in the Electron app
-- [ ] **7.3 CI** — build, test, release pipeline
-- [ ] **7.4 Docusaurus site** — user-facing docs under `docs/`
+- [ ] **7.2 Portable archives** — zip/tarball per platform, marker file included
+- [ ] **7.3 Packaged desktop app** — backend binary bundled in the Electron app,
+      installer calling the same `mnemosyne install` the CLI exposes
+- [ ] **7.4 CI** — build, test, release pipeline
+- [ ] **7.5 Docusaurus site** — user-facing docs under `docs/`
 
 ---
 
@@ -110,6 +125,14 @@ The GUI needs a transport; the transport needs a reason to exist. Both land here
 Recorded so they stay decided rather than getting rediscovered every few weeks:
 
 - **Multi-user / server hosting.** Mnemosyne is a local, single-user tool.
+- **A boot-time system service.** Memories live in a user profile, so a service
+  running as SYSTEM before login could not reach them without an impersonation
+  layer. The daemon is per-user and starts at logon in every install mode; see
+  [`devdocs/deployment.md`](devdocs/deployment.md).
+- **A loopback TCP port.** The local channel uses a named pipe or a unix socket,
+  so there is no port to firewall, collide with, or reach from the LAN.
+- **Editing shell profiles.** PATH is handled with a symlink into a directory
+  already on PATH, or the Windows registry. Dotfiles belong to the user.
 - **Cloud sync.** The memory root is a plain folder — Dropbox, Syncthing, or git
   already solve this better than we would.
 - **A plugin system.** No second implementation of anything exists yet, so there

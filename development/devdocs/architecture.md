@@ -107,3 +107,28 @@ workspace graph as the frontend.
 | `pnpm test`  | `go test ./...`, and the frontend suite once it exists |
 | `pnpm lint`  | `go vet ./...`                                      |
 | `pnpm dev`   | Runs the MCP server from source                     |
+
+## Processes
+
+Two processes run the same core, and neither is privileged over the other:
+
+```
+  agent (Claude Code, Codex)            desktop app
+        │ spawns per session                  │ connects
+        ▼                                     ▼
+  mnemosyne serve                       mnemosyne daemon        [Phase 2]
+  (MCP over stdio)                      (named pipe / unix socket)
+        └──────────────┬──────────────────────┘
+                       ▼
+              the same memory root
+```
+
+There is no proxy layer and no exclusive owner. SQLite runs in WAL mode, memory
+files are written through an atomic rename, and reconcile repairs drift — so
+concurrent processes are safe by construction rather than by coordination.
+Adding a proxy would mean a protocol, a fallback for when the daemon is absent,
+and a new class of bug, all to protect an invariant the storage design already
+holds.
+
+Install modes, the logon autostart, the local channel, and portable mode are
+specified in [`deployment.md`](deployment.md).
