@@ -259,4 +259,3 @@ Some more text with #react and repeated #database tag.
 		t.Errorf("parsed doc.Tags = %v", doc.Tags)
 	}
 }
-

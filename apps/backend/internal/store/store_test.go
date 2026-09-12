@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -184,13 +185,13 @@ func TestDeleteMemory(t *testing.T) {
 	s := newStore(t)
 	m := write(t, s, "p", "Doomed", "body\n")
 
-	if err := s.DeleteMemory("p", m.Slug); err != nil {
+	if _, err := s.DeleteMemory("p", m.Slug); err != nil {
 		t.Fatalf("DeleteMemory: %v", err)
 	}
 	if _, err := s.ReadMemory("p", m.Slug); !errors.Is(err, ErrNotFound) {
 		t.Errorf("ReadMemory after delete: err = %v, want ErrNotFound", err)
 	}
-	if err := s.DeleteMemory("p", m.Slug); !errors.Is(err, ErrNotFound) {
+	if _, err := s.DeleteMemory("p", m.Slug); !errors.Is(err, ErrNotFound) {
 		t.Errorf("second DeleteMemory: err = %v, want ErrNotFound", err)
 	}
 }
@@ -304,5 +305,139 @@ func TestAtomicWriteReplacesExistingFile(t *testing.T) {
 		if strings.Contains(e.Name(), ".tmp-") {
 			t.Errorf("temp file %q left behind", e.Name())
 		}
+	}
+}
+
+func TestWriteModeJoinsBodies(t *testing.T) {
+	cases := []struct {
+		mode string
+		want string
+	}{
+		{ModeReplace, "second\n"},
+		{"", "second\n"},
+		{ModeAppend, "first\n\nsecond\n"},
+		{ModePrepend, "second\n\nfirst\n"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.mode, func(t *testing.T) {
+			s := newStore(t)
+			first := write(t, s, "p", "Log", "first\n")
+
+			got, created, err := s.WriteMemory(WriteRequest{
+				Project: "p",
+				Memory:  first.Slug,
+				Body:    "second\n",
+				Mode:    tc.mode,
+			})
+			if err != nil {
+				t.Fatalf("WriteMemory(mode=%q): %v", tc.mode, err)
+			}
+			if created {
+				t.Error("created = true when updating an existing memory")
+			}
+			if got.Body != tc.want {
+				t.Errorf("Body = %q, want %q", got.Body, tc.want)
+			}
+		})
+	}
+}
+
+// A mode on a create has nothing to join, so it must be inert rather than an
+// error: the first "append to todo" has to work like the tenth.
+func TestWriteModeIsInertOnCreate(t *testing.T) {
+	s := newStore(t)
+
+	m, created, err := s.WriteMemory(WriteRequest{
+		Project: "p",
+		Memory:  "todo",
+		Body:    "- first item\n",
+		Mode:    ModeAppend,
+	})
+	if err != nil {
+		t.Fatalf("WriteMemory: %v", err)
+	}
+	if !created {
+		t.Error("created = false for a slug that did not exist")
+	}
+	if m.Body != "- first item\n" {
+		t.Errorf("Body = %q, want the content as given", m.Body)
+	}
+}
+
+func TestWriteRejectsUnknownMode(t *testing.T) {
+	s := newStore(t)
+	write(t, s, "p", "Log", "first\n")
+
+	_, _, err := s.WriteMemory(WriteRequest{
+		Project: "p",
+		Memory:  "log",
+		Body:    "second\n",
+		Mode:    "supersede",
+	})
+	if !errors.Is(err, ErrInvalid) {
+		t.Errorf("err = %v, want ErrInvalid", err)
+	}
+}
+
+// Deleting moves the file to the trash rather than unlinking it, so a wrong
+// delete by an agent costs the user a restore and not the memory.
+func TestDeleteMemoryMovesToTrash(t *testing.T) {
+	s := newStore(t)
+	m := write(t, s, "p", "Doomed", "body\n")
+
+	grave, err := s.DeleteMemory("p", m.Slug)
+	if err != nil {
+		t.Fatalf("DeleteMemory: %v", err)
+	}
+
+	data, err := os.ReadFile(grave)
+	if err != nil {
+		t.Fatalf("read trashed file %q: %v", grave, err)
+	}
+	if !strings.Contains(string(data), "body") {
+		t.Errorf("trashed file lost its content: %q", data)
+	}
+	if want := filepath.Join(s.InternalPath(TrashDir), "p"); filepath.Dir(grave) != want {
+		t.Errorf("trashed to %q, want a file in %q", grave, want)
+	}
+}
+
+// A project-scoped recall also answers from the user-level "global" project,
+// so standing preferences come back without the agent making a second call.
+func TestRecallFoldsInGlobalProject(t *testing.T) {
+	s := newStore(t)
+	write(t, s, "someproject", "Build command", "run pnpm build to compile\n")
+	write(t, s, GlobalProject, "Package manager", "always use pnpm, never npm\n")
+
+	hits, err := s.Recall(context.Background(), "pnpm", "someproject", 10, ModeText)
+	if err != nil {
+		t.Fatalf("Recall: %v", err)
+	}
+
+	seen := map[string]bool{}
+	for _, h := range hits {
+		seen[h.Project] = true
+	}
+	if !seen["someproject"] {
+		t.Error("project-scoped hit missing from its own project")
+	}
+	if !seen[GlobalProject] {
+		t.Errorf("global memory not folded in; projects seen: %v", seen)
+	}
+}
+
+// Without a global project a scoped recall must still succeed: that is the
+// normal state until the user has written one.
+func TestRecallWithoutGlobalProject(t *testing.T) {
+	s := newStore(t)
+	write(t, s, "someproject", "Build command", "run pnpm build to compile\n")
+
+	hits, err := s.Recall(context.Background(), "pnpm", "someproject", 10, ModeText)
+	if err != nil {
+		t.Fatalf("Recall: %v", err)
+	}
+	if len(hits) != 1 {
+		t.Errorf("got %d hits, want 1", len(hits))
 	}
 }

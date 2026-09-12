@@ -44,6 +44,41 @@ type WriteRequest struct {
 	Body    string
 	Tags    *[]string
 	Links   *[]string
+
+	// Mode is how Body meets the existing body: ModeReplace (the default),
+	// ModeAppend, or ModePrepend. It only applies to an update — on create
+	// there is nothing to join, so Body is written as given whatever it says.
+	Mode string
+}
+
+// How a write joins an existing body. Appending is the common case an agent
+// would otherwise pay for twice: read the whole memory, then write the whole
+// memory back with one line added.
+const (
+	ModeReplace = "replace"
+	ModeAppend  = "append"
+	ModePrepend = "prepend"
+)
+
+// joinBody applies a write mode. Bodies are separated by a blank line, so
+// appended Markdown stays valid: a list item glued to a paragraph is not.
+func joinBody(existing, incoming, mode string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", ModeReplace:
+		return incoming, nil
+	case ModeAppend:
+		if strings.TrimSpace(existing) == "" {
+			return incoming, nil
+		}
+		return strings.TrimRight(existing, "\n") + "\n\n" + strings.TrimLeft(incoming, "\n"), nil
+	case ModePrepend:
+		if strings.TrimSpace(existing) == "" {
+			return incoming, nil
+		}
+		return strings.TrimRight(incoming, "\n") + "\n\n" + strings.TrimLeft(existing, "\n"), nil
+	default:
+		return "", fmt.Errorf("unknown write mode %q: use replace, append, or prepend: %w", mode, ErrInvalid)
+	}
 }
 
 // memoryPath validates a memory slug and returns its file path.
@@ -143,6 +178,11 @@ func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 	if strings.TrimSpace(req.Title) == "" && req.Memory == "" {
 		return nil, false, fmt.Errorf("a new memory needs a title: %w", ErrInvalid)
 	}
+	// Rejected here rather than where the bodies are joined, so a misspelled
+	// mode fails on a create too instead of being silently ignored.
+	if _, err := joinBody("", "", req.Mode); err != nil {
+		return nil, false, err
+	}
 	if _, err := s.EnsureProject(req.Project); err != nil {
 		return nil, false, err
 	}
@@ -213,7 +253,13 @@ func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 	if req.Links != nil {
 		doc.Links = normaliseList(*req.Links)
 	}
-	doc.Body = req.Body
+	// A create has no existing body to join, so the mode is inert rather than
+	// an error: "append to todo" must work the first time as well as the tenth.
+	if created {
+		doc.Body = req.Body
+	} else if doc.Body, err = joinBody(doc.Body, req.Body, req.Mode); err != nil {
+		return nil, false, err
+	}
 	doc.Updated = now
 
 	data, err := doc.Format()
@@ -234,26 +280,44 @@ func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 	return written, created, nil
 }
 
-// DeleteMemory removes a memory file. It is not recoverable until backups land.
-func (s *Store) DeleteMemory(project, ref string) error {
+// TrashDir is where deleted memories are kept, under the root's internal
+// directory so it is never mistaken for a project.
+const TrashDir = "trash"
+
+// DeleteMemory removes a memory from its project and returns where the file
+// went. It is a move into the trash, not an unlink: an agent that deletes the
+// wrong memory should cost the user a restore, not the memory.
+//
+// The index row and the change event are the same either way — as far as every
+// reader is concerned the memory is gone.
+func (s *Store) DeleteMemory(project, ref string) (string, error) {
 	dir, err := s.projectDir(project)
 	if err != nil {
-		return err
+		return "", err
 	}
 	slug, err := s.resolveRef(project, dir, ref)
 	if err != nil {
-		return err
+		return "", err
 	}
 	path, err := s.memoryPath(dir, slug)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("memory %q in project %q: %w", ref, project, ErrNotFound)
+
+	trash := filepath.Join(s.InternalPath(TrashDir), project)
+	if err := os.MkdirAll(trash, 0o755); err != nil {
+		return "", fmt.Errorf("create trash directory: %w", err)
 	}
+	// Stamped, so deleting two memories that share a slug across time does not
+	// have the second silently overwrite the first.
+	grave := filepath.Join(trash, fmt.Sprintf("%s-%d%s", slug, time.Now().Unix(), memoryExt))
+	if err := os.Rename(path, grave); err != nil {
+		return "", fmt.Errorf("memory %q in project %q: %w", ref, project, ErrNotFound)
+	}
+
 	s.unindex(project, slug)
 	s.publish(events.MemoryDeleted, project, slug)
-	return nil
+	return grave, nil
 }
 
 // resolveRef turns a slug or ULID into a slug. A slug hit is a single stat; a

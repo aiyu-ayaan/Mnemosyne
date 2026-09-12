@@ -82,6 +82,35 @@ func toolsCmd(args []string) error {
 		fmt.Printf("\n%-16s [%s]  %s\n", t.Name, kind, argsOf(t.InputSchema))
 		fmt.Printf("  %s\n", wrap(t.Description, *verbose))
 	}
+	// Prompts and resources are part of what a client sees on connect, so a
+	// command that claims to print "what an agent sees" has to show them too.
+	if prompts, err := session.ListPrompts(context.Background(), nil); err == nil && len(prompts.Prompts) > 0 {
+		fmt.Println("\n=== prompts ===")
+		for _, p := range prompts.Prompts {
+			names := make([]string, 0, len(p.Arguments))
+			for _, a := range p.Arguments {
+				if a.Required {
+					names = append(names, a.Name)
+				} else {
+					names = append(names, a.Name+"?")
+				}
+			}
+			fmt.Printf("\n%-16s (%s)\n", p.Name, strings.Join(names, ", "))
+			fmt.Printf("  %s\n", wrap(p.Description, *verbose))
+		}
+	}
+
+	if res, err := session.ListResources(context.Background(), nil); err == nil {
+		fmt.Printf("\n=== resources ===\n\n%d memories advertised as mnemosyne://<project>/<slug>\n", len(res.Resources))
+		for i, r := range res.Resources {
+			if i == 5 {
+				fmt.Printf("  … and %d more\n", len(res.Resources)-i)
+				break
+			}
+			fmt.Printf("  %s\n", r.URI)
+		}
+	}
+
 	fmt.Printf("\nCall one with:  mnemosyne call <tool> '{\"project\":\"...\"}'\n")
 	return nil
 }

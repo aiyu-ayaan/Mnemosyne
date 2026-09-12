@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -38,12 +39,21 @@ USE IT WITHOUT BEING ASKED:
    git history already says.
 4. When the user changes something you have stored, update that memory instead
    of writing a second one. Search before you write.
+5. Recall results carry an "age". A memory that is months old may have been
+   overtaken - prefer the current code or ask, and write the answer back rather
+   than leaving a stale fact to be recalled again next session.
 
 PROJECT AND MEMORY CONVENTION:
 
 A project is one codebase; use the repository directory name as its slug
 (for example "mnemosyne"). Projects are created on first write, so just use
 the slug - do not ask the user to set one up.
+
+One project is not a codebase: "global" holds facts about the user that hold
+everywhere - how they like to be addressed, tools they always use, conventions
+they carry between repos. Write those there, once, instead of copying them into
+every project. A project-scoped recall searches "global" too, so you get them
+back without a second call.
 
 Within a project, keep these four memories current rather than accumulating
 loose notes. Create one lazily the first time you have something for it:
@@ -76,8 +86,17 @@ const (
 	maxSearchLimit     = 50
 )
 
-// New builds an MCP server backed by s.
+// New builds an MCP server backed by s, advertising the memories that exist
+// now. The advertised set only tracks later changes under Serve — see
+// watchResources for why.
 func New(s *store.Store) *mcp.Server {
+	srv, _ := newWithResources(s)
+	return srv
+}
+
+// newWithResources is New plus the URIs it advertised, which Serve needs in
+// order to take them down again on a rebuild.
+func newWithResources(s *store.Store) (*mcp.Server, []string) {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "mnemosyne",
 		Title:   "Mnemosyne",
@@ -85,7 +104,8 @@ func New(s *store.Store) *mcp.Server {
 	}, &mcp.ServerOptions{Instructions: Instructions})
 
 	register(srv, s)
-	return srv
+	registerPrompts(srv)
+	return srv, registerResources(srv, s)
 }
 
 // --- tool arguments and results ---
@@ -118,13 +138,15 @@ type writeMemoryIn struct {
 	Memory  string   `json:"memory,omitempty" jsonschema:"slug of the memory to write; an existing one is updated, a new slug is created at that slug. Omit to let the title pick the slug."`
 	Tags    []string `json:"tags,omitempty" jsonschema:"replaces the memory's tags when supplied"`
 	Links   []string `json:"links,omitempty" jsonschema:"slugs of related memories; replaces existing links when supplied"`
+	Mode    string   `json:"mode,omitempty" jsonschema:"how content meets what is already there: replace (default), append, or prepend. Use append to add to a running list and prepend for newest-first logs - neither needs a read_memory first"`
 }
 
 type writeMemoryOut struct {
-	Project string `json:"project"`
-	Memory  string `json:"memory"`
-	Title   string `json:"title"`
-	Created bool   `json:"created" jsonschema:"true if a new memory was created, false if an existing one was updated"`
+	Project string      `json:"project"`
+	Memory  string      `json:"memory"`
+	Title   string      `json:"title"`
+	Created bool        `json:"created" jsonschema:"true if a new memory was created, false if an existing one was updated"`
+	Similar []index.Hit `json:"similar,omitempty" jsonschema:"only on create: existing memories that may already cover this ground. Read one before letting it become a duplicate - merge into it with mode 'append' and delete this new one, or leave both if they are genuinely different"`
 }
 
 type deleteMemoryIn struct {
@@ -136,6 +158,7 @@ type deleteMemoryOut struct {
 	Project string `json:"project"`
 	Memory  string `json:"memory"`
 	Deleted bool   `json:"deleted"`
+	Trashed string `json:"trashed,omitempty" jsonschema:"where the file was moved; it can be restored from here"`
 }
 
 type searchIn struct {
@@ -238,16 +261,18 @@ func register(srv *mcp.Server, s *store.Store) {
 			"Pass a slug as 'memory' to write at a known slug - 'todo', 'decisions' - which " +
 			"updates it if it exists and creates it if it does not. Omit 'memory' and the " +
 			"title picks the slug. Search first and update rather than writing a near-duplicate. " +
-			"Content replaces the whole body, so read_memory first when you are appending. " +
+			"Content replaces the whole body by default; pass mode 'append' or 'prepend' to add " +
+			"to an existing memory without reading and resending the rest of it. " +
 			"The project is created automatically if it does not exist, so pass the repository " +
 			"directory name as the slug. Tags and links are only changed when supplied. " +
 			"Do not store what the code or git history already says.",
-	}, func(_ context.Context, _ *mcp.CallToolRequest, in writeMemoryIn) (*mcp.CallToolResult, writeMemoryOut, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeMemoryIn) (*mcp.CallToolResult, writeMemoryOut, error) {
 		req := store.WriteRequest{
 			Project: in.Project,
 			Memory:  in.Memory,
 			Title:   in.Title,
 			Body:    in.Content,
+			Mode:    in.Mode,
 		}
 		// A nil slice means the caller omitted the field; an empty one means
 		// they asked for it to be cleared. Only the latter should overwrite.
@@ -258,30 +283,48 @@ func register(srv *mcp.Server, s *store.Store) {
 			req.Links = &in.Links
 		}
 
+		// Looked up before the write, not after: a memory that exists matches
+		// its own title, and one exact hit is enough to stop the search falling
+		// back to OR — so afterwards the only thing this finds is itself.
+		//
+		// Only when the caller let the title pick the slug. Writing to a slug
+		// they named is a deliberate choice about where something goes, not a
+		// guess worth second-guessing.
+		var similar []index.Hit
+		if in.Memory == "" {
+			similar = similarTo(ctx, s, in.Project, in.Title)
+		}
+
 		m, created, err := s.WriteMemory(req)
 		if err != nil {
 			return nil, writeMemoryOut{}, err
 		}
-		return nil, writeMemoryOut{
+		out := writeMemoryOut{
 			Project: m.Project,
 			Memory:  m.Slug,
 			Title:   m.Title,
 			Created: created,
-		}, nil
+		}
+		if created {
+			out.Similar = similar
+		}
+		return nil, out, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "delete_memory",
 		Title:       "Delete memory",
 		Annotations: destroying,
-		Description: "Delete a memory permanently. There is no undo and no backup yet, " +
-			"so confirm with the user before calling this. To correct a memory that " +
-			"has gone stale, overwrite it with write_memory instead of deleting it.",
+		Description: "Remove a memory from its project. The file is moved to the trash rather " +
+			"than erased, and the result says where, so the user can restore it - but it " +
+			"stops being recalled immediately, so confirm with the user first. To correct a " +
+			"memory that has gone stale, overwrite it with write_memory instead of deleting it.",
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in deleteMemoryIn) (*mcp.CallToolResult, deleteMemoryOut, error) {
-		if err := s.DeleteMemory(in.Project, in.Memory); err != nil {
+		trashed, err := s.DeleteMemory(in.Project, in.Memory)
+		if err != nil {
 			return nil, deleteMemoryOut{}, err
 		}
-		return nil, deleteMemoryOut{Project: in.Project, Memory: in.Memory, Deleted: true}, nil
+		return nil, deleteMemoryOut{Project: in.Project, Memory: in.Memory, Deleted: true, Trashed: trashed}, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -337,7 +380,14 @@ func register(srv *mcp.Server, s *store.Store) {
 
 // Serve runs the server over stdio until the client disconnects or ctx is done.
 func Serve(ctx context.Context, s *store.Store) error {
-	if err := New(s).Run(ctx, &mcp.StdioTransport{}); err != nil {
+	srv, advertised := newWithResources(s)
+
+	// Scoped to this call, so the watcher cannot outlive the server it updates.
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	go watchResources(ctx, srv, s, advertised)
+
+	if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil {
 		return fmt.Errorf("mcp server: %w", err)
 	}
 	return nil
@@ -354,4 +404,27 @@ func clamp(v, def, max int) int {
 		return max
 	}
 	return v
+}
+
+// howManySimilar is how many near-neighbours a create reports. Enough to spot
+// the duplicate that already exists, few enough that the agent reads them.
+const howManySimilar = 3
+
+// similarTo finds memories in project that may already cover title. It is
+// advisory and never blocks the write: a false positive costs the agent one
+// read, while a false negative costs the user a library of near-duplicates
+// nobody notices until recall starts returning three of them.
+//
+// Errors are swallowed on purpose. A project that does not exist yet, or a
+// search index that failed to open, means there is nothing to duplicate — and
+// neither is a reason to fail the write the caller actually asked for.
+func similarTo(ctx context.Context, s *store.Store, project, title string) []index.Hit {
+	if strings.TrimSpace(title) == "" {
+		return nil
+	}
+	hits, err := s.Recall(ctx, title, project, howManySimilar, store.ModeHybrid)
+	if err != nil || len(hits) == 0 {
+		return nil
+	}
+	return hits
 }

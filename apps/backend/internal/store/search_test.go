@@ -137,7 +137,7 @@ func TestDeleteRemovesFromIndex(t *testing.T) {
 	defer s.Close()
 
 	m := write(t, s, "p", "Doomed", "unrepeatable-token\n")
-	if err := s.DeleteMemory("p", m.Slug); err != nil {
+	if _, err := s.DeleteMemory("p", m.Slug); err != nil {
 		t.Fatalf("DeleteMemory: %v", err)
 	}
 	if hits, _ := s.Search("unrepeatable-token", "", 10); len(hits) != 0 {

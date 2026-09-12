@@ -13,7 +13,7 @@ type mockEmbedder struct {
 	model string
 }
 
-func (m *mockEmbedder) Model() string { return m.model }
+func (m *mockEmbedder) Model() string                       { return m.model }
 func (m *mockEmbedder) Available(ctx context.Context) error { return nil }
 func (m *mockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	out := make([][]float32, len(texts))

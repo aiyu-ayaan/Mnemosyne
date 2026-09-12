@@ -352,6 +352,7 @@ type memoryIn struct {
 	Body  string    `json:"body"`
 	Tags  *[]string `json:"tags"`
 	Links *[]string `json:"links"`
+	Mode  string    `json:"mode"`
 }
 
 func (srv *Server) writeMemory(w http.ResponseWriter, r *http.Request) {
@@ -368,6 +369,7 @@ func (srv *Server) writeMemory(w http.ResponseWriter, r *http.Request) {
 		Body:    in.Body,
 		Tags:    in.Tags,
 		Links:   in.Links,
+		Mode:    in.Mode,
 	})
 	if err != nil {
 		fail(w, err)
@@ -382,7 +384,7 @@ func (srv *Server) writeMemory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) deleteMemory(w http.ResponseWriter, r *http.Request) {
-	if err := srv.Store().DeleteMemory(r.PathValue("project"), r.PathValue("memory")); err != nil {
+	if _, err := srv.Store().DeleteMemory(r.PathValue("project"), r.PathValue("memory")); err != nil {
 		fail(w, err)
 		return
 	}

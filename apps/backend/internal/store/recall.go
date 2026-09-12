@@ -170,8 +170,42 @@ func (s *Store) reconcileVectors() error {
 	return nil
 }
 
-// Recall performs keyword (FTS5), semantic (vector), or hybrid search.
+// GlobalProject is the reserved project for facts about the user rather than
+// about one codebase: how they like to be addressed, tools they always reach
+// for, conventions they carry between repos.
+//
+// It is a convention, not a schema — it is an ordinary project directory, and
+// nothing stops a user from deleting it. What makes it useful is that a
+// project-scoped recall searches it too, so an agent working in one repo gets
+// the user's standing preferences back without knowing to ask twice.
+const GlobalProject = "global"
+
+// Recall searches one project, or every project when project is empty, and
+// folds in the user-level GlobalProject either way.
 func (s *Store) Recall(ctx context.Context, query, project string, limit int, mode string) ([]index.Hit, error) {
+	hits, err := s.recallScoped(ctx, query, project, limit, mode)
+	if err != nil || project == "" || project == GlobalProject {
+		return hits, err
+	}
+
+	// A missing or unsearchable "global" is the normal case until the user has
+	// one, so its failure is not the caller's problem: the project hits stand.
+	global, gerr := s.recallScoped(ctx, query, GlobalProject, limit, mode)
+	if gerr != nil || len(global) == 0 {
+		return hits, nil
+	}
+
+	merged := append(hits, global...)
+	sort.SliceStable(merged, func(i, j int) bool { return merged[i].Score > merged[j].Score })
+	if len(merged) > limit {
+		merged = merged[:limit]
+	}
+	return merged, nil
+}
+
+// recallScoped performs keyword (FTS5), semantic (vector), or hybrid search
+// against exactly the project it is given.
+func (s *Store) recallScoped(ctx context.Context, query, project string, limit int, mode string) ([]index.Hit, error) {
 	if s.index == nil {
 		return nil, fmt.Errorf("search is unavailable: the index failed to open")
 	}
@@ -233,11 +267,9 @@ func (s *Store) Recall(ctx context.Context, query, project string, limit int, mo
 			vecHits, _ = s.index.Nearest(normQuery, s.embed.Model(), project, limit*2)
 		}
 
+		// Only a failure on both halves is fatal: text hits alone still rank.
 		if textErr != nil && len(vecHits) == 0 {
-			if textErr != nil {
-				return nil, textErr
-			}
-			return nil, fmt.Errorf("search failed")
+			return nil, textErr
 		}
 
 		// RRF formula: score = sum(1.0 / (k + rank)), k = 60

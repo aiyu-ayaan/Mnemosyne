@@ -50,6 +50,33 @@ type Hit struct {
 	// not select them.
 	Created string `json:"created,omitempty"`
 	Updated string `json:"updated,omitempty"`
+	// Age is how long ago Updated was, as a short human phrase ("3d", "8mo").
+	// A reader that is a language model weighs "8mo" without doing date
+	// arithmetic against a today it may be wrong about.
+	Age string `json:"age,omitempty"`
+}
+
+// humanAge renders how long ago an RFC 3339 timestamp was, coarsely: the point
+// is "is this fact still likely true", which days-or-months answers and hours
+// do not.
+func humanAge(updated string) string {
+	t, err := time.Parse(time.RFC3339, updated)
+	if err != nil {
+		return ""
+	}
+	days := int(time.Since(t).Hours() / 24)
+	switch {
+	case days < 1:
+		return "today"
+	case days == 1:
+		return "1d"
+	case days < 30:
+		return fmt.Sprintf("%dd", days)
+	case days < 365:
+		return fmt.Sprintf("%dmo", days/30)
+	default:
+		return fmt.Sprintf("%dy", days/365)
+	}
 }
 
 // Stamp is the indexed file state used to detect changes during reconcile.
@@ -335,7 +362,7 @@ func (ix *Index) Search(query, project string, limit int) ([]Hit, error) {
 
 func (ix *Index) search(match, project string, limit int) ([]Hit, error) {
 	q := `
-		SELECT m.project, m.slug, m.id, m.title, m.tags,
+		SELECT m.project, m.slug, m.id, m.title, m.tags, m.created, m.updated,
 		       snippet(memories_fts, 2, '[', ']', ' … ', 16),
 		       bm25(memories_fts)
 		FROM memories_fts
@@ -363,12 +390,13 @@ func (ix *Index) search(match, project string, limit int) ([]Hit, error) {
 			snippet string
 			score   float64
 		)
-		if err := rows.Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &snippet, &score); err != nil {
+		if err := rows.Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &h.Created, &h.Updated, &snippet, &score); err != nil {
 			return nil, fmt.Errorf("scan search result: %w", err)
 		}
 		if tags != "" {
 			h.Tags = strings.Fields(tags)
 		}
+		h.Age = humanAge(h.Updated)
 		h.Snippet = strings.TrimSpace(snippet)
 		// bm25 returns a negative score where more negative is a better match.
 		// Flipping the sign means callers can sort descending like everywhere else.
@@ -412,16 +440,17 @@ func (ix *Index) GetHit(project, slug string) (Hit, error) {
 		body string
 	)
 	err := ix.db.QueryRow(`
-		SELECT m.project, m.slug, m.id, m.title, m.tags, f.body
+		SELECT m.project, m.slug, m.id, m.title, m.tags, m.created, m.updated, f.body
 		FROM memories m
 		JOIN memories_fts f ON f.rowid = m.rowid
-		WHERE m.project = ? AND m.slug = ?`, project, slug).Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &body)
+		WHERE m.project = ? AND m.slug = ?`, project, slug).Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &h.Created, &h.Updated, &body)
 	if err != nil {
 		return Hit{}, err
 	}
 	if tags != "" {
 		h.Tags = strings.Fields(tags)
 	}
+	h.Age = humanAge(h.Updated)
 	snippet := strings.TrimSpace(body)
 	if len(snippet) > 160 {
 		snippet = snippet[:157] + "..."
@@ -457,6 +486,7 @@ func (ix *Index) Backlinks(project, slug string) ([]Hit, error) {
 		if tags != "" {
 			h.Tags = strings.Fields(tags)
 		}
+		h.Age = humanAge(h.Updated)
 		snippet := strings.TrimSpace(body)
 		if len(snippet) > 160 {
 			snippet = snippet[:157] + "..."
@@ -517,6 +547,9 @@ func (ix *Index) Graph(project string) (GraphData, error) {
 		nodes = append(nodes, n)
 		nodeSet[n.ID] = true
 	}
+	if err := rows.Err(); err != nil {
+		return GraphData{}, fmt.Errorf("read graph nodes: %w", err)
+	}
 
 	edgeQ := `SELECT source_project, source_slug, target_project, target_slug FROM links`
 	var edgeArgs []any
@@ -541,6 +574,9 @@ func (ix *Index) Graph(project string) (GraphData, error) {
 		if nodeSet[src] && nodeSet[tgt] {
 			edges = append(edges, GraphEdge{Source: src, Target: tgt})
 		}
+	}
+	if err := eRows.Err(); err != nil {
+		return GraphData{Nodes: nodes, Edges: edges}, fmt.Errorf("read graph edges: %w", err)
 	}
 
 	return GraphData{Nodes: nodes, Edges: edges}, nil

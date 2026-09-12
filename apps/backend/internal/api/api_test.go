@@ -326,5 +326,3 @@ func TestShutdownEndpoint(t *testing.T) {
 		t.Fatal("onShutdown was not called within 2s")
 	}
 }
-
-
