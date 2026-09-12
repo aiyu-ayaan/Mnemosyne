@@ -9,6 +9,39 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 ---
 
+## What's next
+
+Phases 1–4 are done. The next three pieces of work, in the order they should be
+picked up and with the reason each is where it is:
+
+**1. Finish the desktop shell — 2.13 to 2.17.** The shell is structurally right
+now (one tab strip, a palette), but the editor is still a form over a textarea
+with a from-scratch Markdown renderer inside it. Start with **2.13**: roughly
+240 of `Editor.tsx`'s 646 lines reimplement `marked`, badly — no code
+highlighting, no tables — and replacing them is a net deletion. Then **2.16**,
+the Trash view, because Stage 13 made deletes recoverable on disk and nothing in
+the GUI can yet recover one. **2.14** and **2.15** are polish and can slip.
+
+**2. Phase 6 — token accounting.** This is the differentiator. Every competitor
+claims to save context; none shows the user the number, and Mnemosyne already
+has the event bus it needs. Do **6.5** (the audit trail) first: recalls are
+reads, so nothing publishes them today, which means there is no honest way to
+compute 6.3's savings estimate — and "which memories are actually being
+recalled" is worth seeing on its own.
+
+**3. Phase 5 — encryption, backup, export.** Deliberately after 6: the memory
+root is plain Markdown in a folder the user chose, so git or Syncthing already
+covers most of the risk, and export/import matters more than at-rest encryption
+for a local single-user tool. Do **5.3/5.4** before **5.1/5.2**.
+
+**Not next, on purpose.** Phase 3.5's retrieval work (reranking, entity
+matching) is blocked on **3.5.4**, an evaluation set. There is no way to tell
+whether any ranking change helps without a fixture of questions and the memories
+that should answer them, and shipping ranking changes on vibes is how a search
+system gets quietly worse.
+
+---
+
 ## Phase 1 — MVP: a working MCP memory server
 
 **Goal:** an AI agent (Claude Code, Codex, …) can store and recall per-project
@@ -36,6 +69,15 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Discoverability: server `instructions`, tool titles and annotations, so
         agents reach for Mnemosyne without being told to
   - [x] `mnemosyne tools` / `mnemosyne call` for driving tools by hand
+  - [x] `write_memory` `mode`: `append` / `prepend`, so adding a line to `todo`
+        or `dev-log` stops costing a `read_memory` plus the whole body back
+  - [x] Resources — every memory at `mnemosyne://<project>/<slug>`, kept live
+        off the change bus, so a user can `@`-mention one in their client
+  - [x] Prompts — `checkpoint`, `onboard`, `review-stale`: user-invoked, so
+        they cost nothing per session unlike `instructions`
+  - [x] `age` on every hit, and the instruction to distrust an old fact
+  - [x] `similar` on create — the near-duplicates that already exist
+  - [x] Delete moves to `.mnemosyne/trash/` instead of unlinking
 - [x] **1.5 CLI + config** — `serve`, `doctor`, `root`, `version`; root
       resolution (flag → env → config file → OS default dir)
 - [x] **1.6 Portable mode + install** — see [`devdocs/deployment.md`](devdocs/deployment.md)
@@ -77,7 +119,25 @@ to talk to it is a process that burns memory and does nothing.
 - [x] **2.9 Memory editor** — title, tags, and links as a form over a Markdown
       body; dirty tabs, discard confirmation, delete confirmation
 - [x] **2.10 Settings** — memory root with a native picker, applied live by the
-      daemon; theme toggle; installation details
+      daemon; installation details. Theme lives only in Theme Studio
+- [x] **2.11 One tab strip** — `MemoryTab | ViewTab`, so Settings and the graph
+      open beside a memory instead of replacing every open tab
+- [x] **2.12 Command palette** — `Ctrl+Shift+P`, sharing quick-open's overlay
+
+### Phase 2 — still open
+
+- [ ] **2.13 Drop the hand-rolled Markdown renderer** — ~240 of `Editor.tsx`'s
+      646 lines are a from-scratch renderer with no code highlighting and no
+      tables. `marked` + `DOMPurify`, keeping the `[[wikilink]]` extension,
+      which is the one part that is genuinely ours
+- [ ] **2.14 Custom title bar** — `◈ Mnemosyne`, a `project › memory`
+      breadcrumb, window controls. The biggest remaining "not VS Code" signal
+- [ ] **2.15 Resizable sidebar and panel** — both are a fixed `w-64` today
+- [ ] **2.16 Trash in the Explorer** — restore or purge what `delete_memory`
+      moved aside (Stage 13). Restoring is a human decision, which is why there
+      is no MCP tool for it
+- [ ] **2.17 Activity panel** — a fourth panel tab fed by the existing SSE
+      stream: what agents wrote, updated, and deleted, live
 
 ---
 
@@ -89,6 +149,26 @@ to talk to it is a process that burns memory and does nothing.
 - [x] **3.4 `recall` MCP tool** — semantic entry point for agents (`recall`), `/v1/embeddings` endpoint, hybrid search in desktop UI
 
 ---
+
+## Phase 3.5 — Retrieval quality
+
+Scoped against the 2026 state of the art rather than invented: the published
+comparisons ([mem0's State of AI Agent Memory 2026](https://mem0.ai/blog/state-of-ai-agent-memory-2026),
+[Zep/Graphiti](https://arxiv.org/abs/2501.13956)) agree on which parts of a
+memory system move recall numbers, and Mnemosyne has the first two of three
+retrieval signals.
+
+- [ ] **3.5.1 Entity matching** — a third signal beside semantic and keyword.
+      The reported gains are concentrated in multi-hop questions, which is what
+      "why did we do it this way" actually is
+- [ ] **3.5.2 Reranking** — a second-pass ordering over the fused candidates.
+      Worth measuring before adopting: it costs a model call per recall, and the
+      whole point of Mnemosyne is that it runs locally and for free
+- [ ] **3.5.3 Async writes** — embedding already happens off the write path;
+      make the same true of reconcile so a large import cannot stall a call
+- [ ] **3.5.4 An evaluation set** — the real gap. There is no way to tell
+      whether any of the above helps without a fixture of questions and the
+      memories that should answer them. This lands before 3.5.1, not after
 
 ## Phase 4 — Graph view
 
@@ -111,10 +191,17 @@ to talk to it is a process that burns memory and does nothing.
 
 ## Phase 6 — Token accounting
 
+The differentiator. Every competitor claims to save context; none of them shows
+the user the number. Mnemosyne already has the event bus this needs.
+
 - [ ] **6.1 Token counting** — per memory, per project
 - [ ] **6.2 Usage tracking** — tokens spent per project
 - [ ] **6.3 Savings estimate** — tokens served from memory instead of re-read context
 - [ ] **6.4 GUI surfacing** — status bar and project overview
+- [ ] **6.5 Audit trail** — which memories were actually recalled, and by what.
+      Recalls are reads, so nothing publishes them today. Memory you cannot
+      audit is memory you cannot trust, and this is also what makes 6.3 honest
+      rather than a guess
 
 ---
 
@@ -146,5 +233,17 @@ Recorded so they stay decided rather than getting rediscovered every few weeks:
   already solve this better than we would.
 - **A plugin system.** No second implementation of anything exists yet, so there
   is nothing to abstract over.
+- **A large tool surface.** The nearest competitor ships 54 MCP tools; that is a
+  feature table, not a design. Every tool is a choice an agent pays to consider
+  on every call, so the surface grows sideways into resources and prompts, which
+  cost nothing to ignore.
+- **LLM-driven consolidation.** Summarising or merging memories automatically
+  needs an inference budget a local tool does not have, and it silently rewrites
+  what the user wrote. `similar` on create gets most of the benefit by telling
+  the agent instead of acting behind it.
+- **A temporal knowledge graph** (Zep/Graphiti-style bi-temporal edge
+  invalidation). The right answer at conversation scale; Mnemosyne's unit is a
+  Markdown file a human edits, and `age` plus `review-stale` covers staleness
+  without a second data model.
 - **Postgres / pgvector.** The initial sketch mentioned it; SQLite covers a
   single-user desktop app completely, and one database is simpler than two.

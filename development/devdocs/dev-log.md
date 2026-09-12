@@ -3,6 +3,125 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 14 — One tab strip, a command palette, and one home for the theme
+
+Two reported bugs turned out to sit on top of a structural one.
+
+**Theme was configurable in four places** — Settings, Theme Studio, the status
+bar, and the Welcome screen. Settings lost its copy (the whole `THEMES.map`
+swatch grid, ~80 lines) and its `theme`/`onTheme`/`onOpenThemeStudio` props;
+Theme Studio is the one place a theme is chosen, reachable from the status bar
+and the palette. Settings is storage root and diagnostics now.
+
+**The settings icon was a sun.** `<circle r=3>` plus six disconnected line stubs
+at uneven angles reads as a sun at 24px and as noise at 14px. Replaced with one
+closed 8-tooth cog outline on the same 24×24 / `strokeWidth 1.5` grid as the
+other icons, generated rather than hand-fitted: flat tooth tops at r=9.7, flat
+valleys at r=6.7, eight evenly spaced teeth, concentric hub. Checked at both
+sizes side by side against the old one before keeping it.
+
+**The structural bug: two parallel tab systems.** `App.tsx` carried both a
+`tabs` array for memories and a `mainMode` enum for Graph/MCP/Theme/Settings.
+They could not coexist — opening Settings hid every memory you had open — and
+`Tabs.tsx` repeated the same tab block four times because the views were not in
+a list to map over.
+
+`OpenTab` became a discriminated union of `MemoryTab | ViewTab`. That deleted the
+`mainMode` state machine and its five-branch `onActivity`, collapsed the four
+copied blocks into one `map`, and removed the tab bar's right-hand
+Graph/MCP/Theme/⚙ strip, which duplicated the activity bar two centimetres away.
+Net −182 lines across the desktop app; `Tabs.tsx` went 206 → 127. TypeScript
+found every memory-only path for free once the union existed — `saveTab`,
+`deleteActive`, the backlinks effect, `dirtyCount`, the project-delete filter —
+which is the argument for the union over a nullable field.
+
+**A command palette**, `Ctrl+Shift+P`, in the overlay `QuickOpen` already had:
+`>` switches modes and the arrow keys, filter, and Enter are shared, because in
+an editor they are one overlay. Commands that need an open memory grey out
+rather than disappear. `ui-design.md` had ruled the palette out; the reversal and
+its reason are recorded there.
+
+**Own skin, not a clone**: an accent rule along the top of the active tab rather
+than VS Code's, and per-kind marks on the four convention slugs (`todo`,
+`decisions`, `conventions`, `dev-log`) so a row of tabs is scannable instead of
+five identical document icons.
+
+**Verified with:** `tsc --noEmit`, `vite build`, and the built renderer driven in
+Electron against a stubbed bridge — screenshots confirming Settings opens beside
+an open memory tab, the palette renders with its groups and disabled entries, and
+Settings holds no theme picker. Also corrected `ui-design.md`, which claimed the
+graph uses React Flow; it is hand-rolled SVG and always was.
+
+## Stage 13 — An MCP surface that is cheap to use and honest about what it knows
+
+The server worked; it was thin in the places that cost tokens every session, and
+silent in the two places 2026 research says agent memory actually fails —
+staleness and duplicates. Seven changes, plus two bugs found while making them.
+
+**`write_memory` gained `mode`.** Replacing the whole body meant adding one line
+to `dev-log` cost a `read_memory` and the entire body sent back — paying twice
+for the most common write there is. `append` and `prepend` do it in one call.
+Bodies join on a blank line so appended Markdown stays valid; on a create there
+is nothing to join, so the mode is inert rather than an error, because the first
+"append to `todo`" has to work like the tenth. An unknown mode is rejected up
+front, including on create, so a typo cannot pass silently.
+
+**Resources.** Every memory is now `mnemosyne://<project>/<slug>`, registered at
+startup and kept in step from the change bus, so a user can `@`-mention a memory
+in their client instead of asking the agent to go find it. The watcher runs only
+under `Serve` — `New` gives a correct snapshot, and a goroutine that outlives its
+server is worse than a list that does not move.
+
+**Prompts.** `checkpoint`, `onboard`, `review-stale`. Prompts are the right home
+for a multi-step routine: `instructions` are paid for on every session, a tool is
+a choice on every call, a prompt costs nothing until the user picks it.
+
+**`age` on every hit** — `today`, `12d`, `8mo` — and one instruction to distrust
+an old fact and write the answer back. Coarse on purpose: the reader is a
+language model, and "8mo" is weighed without date arithmetic against a today it
+may be wrong about.
+
+**`similar` on create.** Up to three existing memories that may already cover the
+ground, so the agent merges instead of forking. It never blocks the write.
+
+**Delete moves to `.mnemosyne/trash/`** instead of unlinking, stamped so two
+memories that shared a slug across time do not overwrite each other. The result
+names the path. No `restore_memory` tool: restoring is a human decision about
+something an agent already got wrong, so it belongs in the GUI.
+
+**A `global` project** for facts about the user rather than about a codebase. A
+project-scoped `recall` searches it too and merges by score, so preferences are
+stated once instead of once per repository.
+
+### Two bugs found on the way
+
+**`age` did not work, because `updated` was never selected.** `Hit` had `Created`
+and `Updated` fields whose comment admitted they were "empty when the query did
+not select them" — and neither `search` nor `GetHit` selected them, so they were
+empty on every search path. Only `Backlinks` filled them. Both queries select the
+timestamps now.
+
+**`similar` found nothing, because the lookup ran after the write.** The new
+memory matches its own title exactly, and one exact hit is enough to stop the FTS
+query falling back to OR — so a loosely-worded duplicate found nothing but
+itself, which was then filtered out, leaving an empty and falsely reassuring
+answer. The lookup runs before the write. The original test passed throughout,
+because its two titles shared a phrase that matched under AND;
+`TestCreateReportsLooselySimilarMemories` pins the shape that actually broke.
+
+Also fixed while in the files: a dead `if textErr != nil` nested inside
+`if textErr != nil && …` in hybrid recall, and two missing `rows.Err()` checks in
+the graph query that would have silently truncated the graph on a mid-iteration
+error. Deleted `cmd/snapshot`, an unformatted scratch tool whose only behaviour
+was writing a `repo` memory listing every file in the repo — which is what
+`git ls-files` already says.
+
+**Verified with:** `go test ./...`, `go vet ./...`, `gofmt -l .` clean, and the
+real binary against a scratch root — `prepend` producing newest-first without a
+read, `similar` catching both near-duplicates, `age` reading `today`, and
+`delete_memory` returning its trash path. `mnemosyne tools` now prints prompts
+and resources alongside the tools, since it claims to show what an agent sees.
+
 ## Stage 12 — Graceful daemon shutdown and Windows file lock resilience
 
 A backend rebuild during `pnpm dev` failed with `open ..\..\bin\mnemosyne.exe: The process cannot access the file because it is being used by another process.` when a previous dev session or active MCP client was running.
