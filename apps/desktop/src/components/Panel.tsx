@@ -258,13 +258,13 @@ export default function Panel({
             <div className="rounded-md border border-line bg-raised/40 p-3 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-ink">Google Antigravity & Agent Config</h4>
+                  <h4 className="font-semibold text-ink">AI Agents &amp; MCP Config</h4>
                   <span className="rounded bg-accent/20 px-1.5 py-0.2 font-mono text-[9.5px] font-semibold text-accent">
-                    ~/.gemini/config/mcp_config.json
+                    mcp_config.json
                   </span>
                 </div>
                 <p className="text-ink-dim mb-1.5 text-[11px]">
-                  Configure in Antigravity or run via stdio:
+                  Configure in your AI agent or run via stdio:
                 </p>
                 <div className="relative">
                   <pre className="selectable rounded border border-line bg-shell p-2 font-mono text-[10.5px] text-ink overflow-x-auto leading-relaxed">

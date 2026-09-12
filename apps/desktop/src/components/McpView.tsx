@@ -20,10 +20,10 @@ type ClientDef = {
 
 const CLIENT_DEFS: ClientDef[] = [
   {
-    id: "antigravity",
-    name: "Google Antigravity",
+    id: "agents",
+    name: "AI Agents",
     badge: "Recommended",
-    configPath: "~/.gemini/config/mcp_config.json",
+    configPath: "mcp_config.json",
     getCommand: (exe) =>
       JSON.stringify(
         {
@@ -37,7 +37,7 @@ const CLIENT_DEFS: ClientDef[] = [
         null,
         2,
       ),
-    note: "Add to ~/.gemini/config/mcp_config.json or workspace .gemini/mcp_config.json",
+    note: "Universal standard JSON configuration for AI agents and MCP tools.",
   },
   {
     id: "codex",
@@ -193,7 +193,7 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
 
         {/* Category Filters */}
         <div className="mt-3 flex items-center gap-1.5">
-          {["all", "antigravity", "codex", "claude", "cursor"].map((cat) => (
+          {["all", "agents", "codex", "claude", "cursor"].map((cat) => (
             <button
               key={cat}
               type="button"
@@ -206,8 +206,8 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
             >
               {cat === "all"
                 ? "All Assistants"
-                : cat === "antigravity"
-                  ? "Google Antigravity"
+                : cat === "agents"
+                  ? "AI Agents"
                   : cat === "claude"
                     ? "Claude Code"
                     : cat === "codex"
@@ -234,7 +234,7 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
               </span>
             </div>
             <p className="mt-1 text-xs text-ink-dim leading-relaxed">
-              If Codex or Antigravity fails with <code className="rounded bg-shell px-1 py-0.5 font-mono text-[11px] text-danger border border-line">program not found</code>, it cannot find <code className="font-mono text-ink">mnemosyne</code> on the current shell&apos;s <code className="font-mono text-ink">%PATH%</code>. Use either solution below:
+              If your AI agent or MCP client shows <code className="rounded bg-shell px-1 py-0.5 font-mono text-[11px] text-danger border border-line">program not found</code>, the process cannot locate <code className="font-mono text-ink">mnemosyne</code> on the current shell&apos;s <code className="font-mono text-ink">%PATH%</code>. Use either solution below:
             </p>
 
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -248,7 +248,7 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
                     </div>
                   </div>
                   <p className="mt-1 text-[11px] text-ink-faint leading-relaxed">
-                    Install <code className="font-mono text-ink">mnemosyne.exe</code> to your user profile and append it to the Windows Registry PATH:
+                    Install <code className="font-mono text-ink">mnemosyne.exe</code> to your user profile and append it to the Windows Registry PATH, then restart your IDE or AI agents:
                   </p>
                 </div>
 
@@ -302,7 +302,7 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
                     <span>Option 2: Direct Workspace Exe (Zero Restart)</span>
                   </div>
                   <p className="mt-1 text-[11px] text-ink-faint leading-relaxed">
-                    Point your tools directly to this repo&apos;s dev binary. Works immediately without restarting terminals:
+                    Point your AI agents directly to this repo&apos;s dev binary. Works immediately without restarting terminals:
                   </p>
                 </div>
 

@@ -186,7 +186,7 @@ export default function ThemeView({ theme, onTheme }: Props) {
           </h1>
           <p className="text-xs text-ink-dim leading-relaxed mb-3">
             Mnemosyne coordinates persistent project memories across multiple AI tools including{" "}
-            <span className="text-accent font-medium">Google Antigravity</span>,{" "}
+            <span className="text-accent font-medium">AI Agents</span>,{" "}
             <span className="text-accent font-medium">Claude Code</span>, and{" "}
             <span className="text-accent font-medium">OpenAI Codex</span>. It stores Markdown files with{" "}
             <span className="underline decoration-accent/60 underline-offset-2">[[backlinks]]</span> and SQLite-vec embeddings.
