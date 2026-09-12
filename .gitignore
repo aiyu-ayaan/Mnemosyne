@@ -1,8 +1,12 @@
 # Build output
 /bin/
 /dist/
-mnemosyne
-mnemosyne.exe
+# Anchored: a bare "mnemosyne" pattern also matches cmd/mnemosyne, which would
+# quietly keep the binary's own source out of the repository.
+/mnemosyne
+/mnemosyne.exe
+/apps/backend/mnemosyne
+/apps/backend/mnemosyne.exe
 
 # Go
 *.test

@@ -55,14 +55,17 @@ The GUI needs a transport; the transport needs a reason to exist. The daemon
 needs a client. All three land together — a background service with nothing able
 to talk to it is a process that burns memory and does nothing.
 
-- [ ] **2.1 API surface** — same core, JSON: projects, memories, search
-- [ ] **2.2 Local channel** — named pipe on Windows, unix socket elsewhere; no
+- [x] **2.1 API surface** — same core, JSON: projects, memories, search, settings,
+      health; `internal/api`, with `ErrInvalid` so a bad slug is a 400, not a 500
+- [x] **2.2 Local channel** — named pipe on Windows, unix socket elsewhere; no
       TCP port, OS permissions as the boundary, token file as defence in depth
-- [ ] **2.3 `mnemosyne daemon`** — long-running, serves the channel, per-user
-- [ ] **2.4 Logon autostart** — Scheduled Task, LaunchAgent, or `systemd --user`,
-      plus `service status|start|stop` to manage it from the CLI
-- [ ] **2.5 Change events** — push index and file changes to connected clients
-- [ ] **2.6 File watcher** — external edits (an agent, an editor, git) reindex live
+- [x] **2.3 `mnemosyne daemon`** — long-running, serves the channel, per-user
+- [x] **2.4 Logon autostart** — Scheduled Task, LaunchAgent, or `systemd --user`,
+      plus `service status|start|stop|install|uninstall` from the CLI;
+      `mnemosyne install` registers it, `uninstall` removes it
+- [x] **2.5 Change events** — `internal/events` bus, pushed over SSE at `/v1/events`
+- [x] **2.6 File watcher** — a reconcile ticker in the daemon, so an external edit
+      reindexes and reaches connected clients as the same event a write would
 - [ ] **2.7 Electron + React + TS + Vite + Tailwind shell**
 - [ ] **2.8 VS Code–style layout** — see [`devdocs/ui-design.md`](devdocs/ui-design.md):
       activity bar, collapsible sidebar, editor tabs, bottom panel, status bar, dark-first

@@ -3,6 +3,66 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 6 — The daemon, the local channel, and the JSON API
+
+`internal/events`, `internal/api`, `internal/channel`, `internal/daemon`,
+`internal/service`, and two new CLI commands. Phase 2.1-2.6 complete.
+
+- `internal/events` is a broadcast bus. The store publishes what it changed;
+  anything holding a connection open forwards it. `/v1/events` is the SSE
+  transport for it.
+- `internal/api` serves the same store methods as JSON. Handlers unmarshal, call
+  one store method, and marshal — the same shape as the MCP handlers, so the two
+  surfaces cannot drift.
+- `internal/channel` is the local transport: a named pipe on Windows via
+  `go-winio`, a unix socket elsewhere. Node's `http` speaks to both through
+  `socketPath`, so the desktop app needs no protocol code of its own.
+- `internal/daemon` ties them together and runs the reconcile ticker.
+- `internal/service` registers the logon entry per platform by driving
+  `schtasks`, `launchctl`, and `systemctl` — the documented interfaces, already
+  installed, and a fraction of the code of the equivalent API bindings.
+
+**Decisions taken here**
+
+- *The watcher polls `Reconcile` rather than using fsnotify.* Reconcile is
+  already the stat-based mechanism for "a change we did not make", so a ticker
+  reuses it for no new dependency, no debounce logic, and no recursive-watch
+  bookkeeping when a project directory appears. Marked with a `ponytail:`
+  comment naming the ceiling — one stat per memory per tick — and the upgrade
+  path if a large root ever shows up in a profile.
+- *`store.ErrInvalid` was added alongside `ErrNotFound`.* Without it the API
+  could only tell "missing" from "everything else", and a mistyped project name
+  would surface in the GUI as a 500. Transports match on the sentinel, so the
+  mapping cannot drift with error wording.
+- *The event bus is shared across a root change.* `store.OpenWith` exists so
+  that `PUT /v1/settings` can close one store and open another while the clients
+  streaming `/v1/events` stay subscribed. The new root is opened before the
+  config file is written, so a bad path leaves the daemon serving what it had.
+- *A slow SSE subscriber drops events rather than blocking the writer.* A
+  dropped event costs a stale row until the next one; blocking a memory write on
+  a wedged GUI socket would cost the write.
+- *A fresh token per daemon start.* A token left behind by a previous run cannot
+  be replayed against this one. It is still defence in depth — the pipe DACL and
+  the socket mode are the boundary.
+- *The Windows task is registered from XML, not `schtasks /SC ONLOGON`.* The two
+  reasons `deployment.md` gives for choosing a Scheduled Task over the Run
+  registry key — restart on failure and no console flash — are only reachable
+  through the XML definition.
+- *`service status` probes the channel as well as the platform.* Only an actual
+  request tells a registered-but-crashed daemon apart from a healthy one, and it
+  exercises the channel, the token, and the store in one call.
+
+**Fixed on the way:** `.gitignore` had a bare `mnemosyne` pattern intended for
+the built binary, which also matched the `cmd/mnemosyne/` directory — so the
+binary's own `main.go` had never been committed. The patterns are now anchored.
+
+**Verified:** `go vet ./...` clean for windows, linux, and darwin; `go test
+./...` passing, including a daemon test that runs over the real platform channel
+and an API test asserting a write arrives on the SSE stream. Then for real: a
+daemon started against a scratch root, `service status` reached it over
+`\.\pipe\mnemosyne.<user>` and reported the root it was serving, and
+reported "not reachable" with the missing token path once it was stopped.
+
 ## Stage 5 — Portable mode, install, and PATH
 
 `internal/install`, a reworked `internal/config`, and the README. MVP complete.
