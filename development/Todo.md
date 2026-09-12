@@ -29,10 +29,10 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Index sync on write/delete; stat-based reconcile on startup
   - [x] Ranked full-text search with snippets
   - [x] Unit tests
-- [ ] **1.4 MCP server** — stdio JSON-RPC via the official Go SDK
-  - [ ] Tools: `list_projects`, `list_memories`, `read_memory`, `write_memory`,
+- [x] **1.4 MCP server** — stdio JSON-RPC via the official Go SDK
+  - [x] Tools: `list_projects`, `list_memories`, `read_memory`, `write_memory`,
         `delete_memory`, `search_memories`
-  - [ ] Tool-level tests against a temp memory root
+  - [x] Tool-level tests driving a real server over an in-memory transport
 - [ ] **1.5 CLI + config** — `mnemosyne serve`, `mnemosyne doctor`, config file
       resolution (flag → env → config file → OS default dir)
 - [ ] **1.6 Docs + release** — README, install and MCP wiring instructions for

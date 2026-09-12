@@ -248,6 +248,17 @@ func (s *Store) resolveRef(project, dir, ref string) (string, error) {
 				return ref, nil
 			}
 		}
+	} else if !markdown.LooksLikeID(ref) {
+		// Neither a usable slug nor an id. Saying so beats scanning the project
+		// to conclude the same thing, and tells the caller what was wrong.
+		return "", fmt.Errorf("invalid memory name %q: use a slug or an id", ref)
+	}
+
+	// Only an id-shaped reference is worth a scan, which is what lets an id
+	// survive a rename. A mistyped slug fails above instead of reading every
+	// file in the project.
+	if !markdown.LooksLikeID(ref) {
+		return "", fmt.Errorf("memory %q in project %q: %w", ref, project, ErrNotFound)
 	}
 
 	slugs, err := s.memorySlugs(dir)

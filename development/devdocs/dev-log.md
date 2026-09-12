@@ -3,6 +3,34 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 3 — MCP server
+
+`internal/mcpserver` exposes the store over MCP using the official Go SDK, with
+the six tools specified in [`mcp-tools.md`](mcp-tools.md).
+
+Handlers are typed, so the SDK infers each tool's JSON schema from a Go struct,
+validates arguments before the handler runs, and turns a returned error into a
+tool error rather than a protocol error. Every handler marshals arguments, calls
+exactly one store method, and marshals the result.
+
+**Verified:** `go vet ./...` clean, `go test ./...` passing — 11 MCP tests that
+drive a real server over an in-memory transport the way an agent would, covering
+the round trip, tag filtering, ranked search, clamped limits, deletion,
+cancellation, and rejected traversal.
+
+**Decisions taken here**
+
+- *Nil slice means "leave alone", empty slice means "clear".* JSON omission and
+  `[]` already differ this way after unmarshalling, so the distinction the store
+  needs comes for free rather than needing a flag.
+- *Out-of-range limits are clamped, not rejected.* The agent guessed a number;
+  failing the call over it helps nobody.
+- *A reference is only scanned for as an id when it is ULID-shaped.* Found while
+  writing the error-message test: any non-slug reference used to fall through to
+  a scan of every file in the project, so a typo cost a full read of the project
+  and then reported a vague "not found". `markdown.LooksLikeID` now separates the
+  two cases, making the common mistake both cheap and clearly explained.
+
 ## Stage 2 — Search index
 
 `internal/index` (SQLite + FTS5) and its wiring into the store.

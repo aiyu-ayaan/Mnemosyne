@@ -35,6 +35,14 @@ func NewID() string {
 	return ulid.MustNew(ulid.Timestamp(time.Now()), rand.Reader).String()
 }
 
+// LooksLikeID reports whether s has the shape of a ULID. It is a cheap filter,
+// not a validity check: it exists so that a lookup by id can be told apart from
+// a mistyped slug without scanning a whole project to find out.
+func LooksLikeID(s string) bool {
+	_, err := ulid.ParseStrict(strings.ToUpper(s))
+	return err == nil
+}
+
 // known lists the frontmatter keys Mnemosyne owns, so Parse can separate them
 // from the ones it must preserve verbatim.
 var known = map[string]bool{
