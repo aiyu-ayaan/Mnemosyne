@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { ChangeEvent, Hit, Meta } from "../lib/types";
-import { CloseIcon, DocIcon, LinkIcon, SearchIcon } from "./Icons";
+import { CheckIcon, CloseIcon, CopyIcon, DocIcon, LinkIcon, SearchIcon } from "./Icons";
 
 export type PanelTab = "search" | "backlinks" | "mcp" | "output";
+
 
 type Props = {
   tab: PanelTab;
@@ -39,8 +40,29 @@ export default function Panel({
   onOpenHit,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const copy = async (key: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((c) => (c === key ? null : c)), 1500);
+  };
+
+  const antigravityJson = JSON.stringify(
+    {
+      mcpServers: {
+        mnemosyne: {
+          command: "mnemosyne",
+          args: ["serve"],
+        },
+      },
+    },
+    null,
+    2
+  );
 
   const tabs: { id: PanelTab; label: string; count?: number }[] = [
+
     { id: "search", label: "Search Results", count: query ? results.length : undefined },
     { id: "backlinks", label: "Backlinks", count: backlinksFor ? backlinks.length : undefined },
     { id: "mcp", label: "MCP Daemon" },
@@ -207,33 +229,83 @@ export default function Panel({
         {/* MCP Tab */}
         {tab === "mcp" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <div className="rounded-md border border-line bg-raised/40 p-3">
-              <h4 className="font-semibold text-ink mb-2">Daemon Connection</h4>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-ink-dim">
-                <dt className="text-ink-faint">Status</dt>
-                <dd className="font-semibold text-tag">Connected & Listening</dd>
-                <dt className="text-ink-faint">Endpoint</dt>
-                <dd className="selectable break-all font-mono text-[11px] text-ink">
-                  {endpoint ?? "not connected"}
-                </dd>
-                <dt className="text-ink-faint">Root</dt>
-                <dd className="selectable break-all font-mono text-[11px] text-ink">
-                  {daemonRoot ?? "—"}
-                </dd>
-              </dl>
+            <div className="rounded-md border border-line bg-raised/40 p-3 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-ink">Daemon Connection</h4>
+                  <span className="flex items-center gap-1 rounded bg-tag/15 px-1.5 py-0.2 font-mono text-[9.5px] font-semibold text-tag">
+                    <span className="h-1.5 w-1.5 rounded-full bg-tag" />
+                    LISTENING
+                  </span>
+                </div>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-ink-dim">
+                  <dt className="text-ink-faint">Endpoint</dt>
+                  <dd className="selectable break-all font-mono text-[11px] text-ink">
+                    {endpoint ?? "not connected"}
+                  </dd>
+                  <dt className="text-ink-faint">Root</dt>
+                  <dd className="selectable break-all font-mono text-[11px] text-ink">
+                    {daemonRoot ?? "—"}
+                  </dd>
+                </dl>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-line text-[11px] text-ink-faint">
+                Tip: Run <code className="font-mono text-ink">mnemosyne install</code> if your terminal reports <code className="font-mono text-danger">program not found</code>.
+              </div>
             </div>
 
-            <div className="rounded-md border border-line bg-raised/40 p-3">
-              <h4 className="font-semibold text-ink mb-2">AI Agent Integration</h4>
-              <p className="text-ink-dim mb-2">
-                Connect AI agents via stdio by running:
-              </p>
-              <pre className="selectable rounded border border-line bg-shell p-2 font-mono text-[11px] text-ink overflow-x-auto">
-                mnemosyne serve
-              </pre>
+            <div className="rounded-md border border-line bg-raised/40 p-3 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-ink">Google Antigravity & Agent Config</h4>
+                  <span className="rounded bg-accent/20 px-1.5 py-0.2 font-mono text-[9.5px] font-semibold text-accent">
+                    ~/.gemini/config/mcp_config.json
+                  </span>
+                </div>
+                <p className="text-ink-dim mb-1.5 text-[11px]">
+                  Configure in Antigravity or run via stdio:
+                </p>
+                <div className="relative">
+                  <pre className="selectable rounded border border-line bg-shell p-2 font-mono text-[10.5px] text-ink overflow-x-auto leading-relaxed">
+                    {antigravityJson}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => copy("antigravity-panel-json", antigravityJson)}
+                    className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded border border-line bg-raised px-1.5 py-0.5 text-[10px] font-medium text-ink-dim hover:bg-hover hover:text-ink transition-colors"
+                  >
+                    {copiedKey === "antigravity-panel-json" ? (
+                      <>
+                        <CheckIcon className="h-3 w-3 text-tag" />
+                        <span className="text-tag">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <CopyIcon className="h-3 w-3" />
+                        <span>Copy JSON</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="font-mono text-[10.5px] text-ink-faint">
+                  Stdio: mnemosyne serve
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copy("serve-cmd", "mnemosyne serve")}
+                  className="flex items-center gap-1 rounded border border-line px-2 py-0.5 text-[10.5px] text-ink-dim hover:bg-hover hover:text-ink"
+                >
+                  {copiedKey === "serve-cmd" ? "Copied" : "Copy Stdio Cmd"}
+                </button>
+              </div>
             </div>
           </div>
         )}
+
 
         {/* Output Log Tab */}
         {tab === "output" && (
