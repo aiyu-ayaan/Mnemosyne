@@ -46,6 +46,10 @@ type Hit struct {
 	Tags    []string `json:"tags,omitempty"`
 	Snippet string   `json:"snippet"`
 	Score   float64  `json:"score"`
+	// RFC 3339, as stored. Empty when the query that produced this hit did
+	// not select them.
+	Created string `json:"created,omitempty"`
+	Updated string `json:"updated,omitempty"`
 }
 
 // Stamp is the indexed file state used to detect changes during reconcile.
@@ -91,8 +95,6 @@ CREATE TABLE IF NOT EXISTS links (
 CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_project, target_slug);
 CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_project, source_slug);
 ` + vectorSchema
-
-
 
 // Open opens or creates the index at path.
 func Open(path string) (*Index, error) {
@@ -416,7 +418,7 @@ func (ix *Index) GetHit(project, slug string) (Hit, error) {
 // Backlinks returns all memories that link to target project/slug.
 func (ix *Index) Backlinks(project, slug string) ([]Hit, error) {
 	q := `
-		SELECT m.project, m.slug, m.id, m.title, m.tags, f.body
+		SELECT m.project, m.slug, m.id, m.title, m.tags, m.created, m.updated, f.body
 		FROM links l
 		JOIN memories m ON m.project = l.source_project AND m.slug = l.source_slug
 		JOIN memories_fts f ON f.rowid = m.rowid
@@ -434,7 +436,7 @@ func (ix *Index) Backlinks(project, slug string) ([]Hit, error) {
 			tags string
 			body string
 		)
-		if err := rows.Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &body); err != nil {
+		if err := rows.Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &h.Created, &h.Updated, &body); err != nil {
 			return nil, fmt.Errorf("scan backlink: %w", err)
 		}
 		if tags != "" {
@@ -528,5 +530,3 @@ func (ix *Index) Graph(project string) (GraphData, error) {
 
 	return GraphData{Nodes: nodes, Edges: edges}, nil
 }
-
-

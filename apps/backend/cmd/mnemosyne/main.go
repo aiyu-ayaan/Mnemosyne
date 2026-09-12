@@ -37,6 +37,8 @@ Commands:
   uninstall   Undo an install
   service     Manage the logon entry: status, start, stop, install, uninstall
   channel     Print where the daemon listens (--json for a client to read)
+  tools       List the MCP tools an agent sees (--full for the whole text)
+  call        Call one MCP tool by hand: mnemosyne call recall '{"query":"x"}'
   version     Print the version
 
 Flags:
@@ -84,6 +86,10 @@ func run(args []string) error {
 		return serviceCmd(rest)
 	case "channel":
 		return channelCmd(rest)
+	case "tools":
+		return toolsCmd(rest)
+	case "call":
+		return callCmd(rest)
 	case "version", "--version", "-v":
 		fmt.Println("mnemosyne", mcpserver.Version)
 		return nil

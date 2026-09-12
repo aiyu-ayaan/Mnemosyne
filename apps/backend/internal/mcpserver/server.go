@@ -113,9 +113,9 @@ type readMemoryIn struct {
 
 type writeMemoryIn struct {
 	Project string   `json:"project" jsonschema:"slug of the project; it is created if it does not exist"`
-	Title   string   `json:"title" jsonschema:"human-readable title; on create it also seeds the memory slug"`
+	Title   string   `json:"title,omitempty" jsonschema:"human-readable title; required unless 'memory' names the slug to write, in which case it defaults from the slug"`
 	Content string   `json:"content" jsonschema:"the memory itself, as Markdown"`
-	Memory  string   `json:"memory,omitempty" jsonschema:"slug or id of an existing memory to update; omit to create a new one"`
+	Memory  string   `json:"memory,omitempty" jsonschema:"slug of the memory to write; an existing one is updated, a new slug is created at that slug. Omit to let the title pick the slug."`
 	Tags    []string `json:"tags,omitempty" jsonschema:"replaces the memory's tags when supplied"`
 	Links   []string `json:"links,omitempty" jsonschema:"slugs of related memories; replaces existing links when supplied"`
 }
@@ -235,8 +235,9 @@ func register(srv *mcp.Server, s *store.Store) {
 		Annotations: mutating,
 		Description: "Store something worth remembering after this session ends: a decision and " +
 			"its reasoning, a user preference, a convention, a correction, a gotcha. " +
-			"Create a memory, or update an existing one by passing its slug or id as 'memory' - " +
-			"search first and update rather than writing a near-duplicate. " +
+			"Pass a slug as 'memory' to write at a known slug - 'todo', 'decisions' - which " +
+			"updates it if it exists and creates it if it does not. Omit 'memory' and the " +
+			"title picks the slug. Search first and update rather than writing a near-duplicate. " +
 			"Content replaces the whole body, so read_memory first when you are appending. " +
 			"The project is created automatically if it does not exist, so pass the repository " +
 			"directory name as the slug. Tags and links are only changed when supplied. " +

@@ -202,6 +202,8 @@ func (s *Store) Backlinks(project, ref string) ([]Meta, error) {
 			ID:      h.ID,
 			Title:   h.Title,
 			Tags:    h.Tags,
+			Created: parseTime(h.Created),
+			Updated: parseTime(h.Updated),
 		}
 	}
 	return metas, nil
@@ -220,3 +222,13 @@ func (s *Store) Graph(project string) (index.GraphData, error) {
 	return s.index.Graph(project)
 }
 
+// parseTime turns an index timestamp back into a time. An unparseable or
+// missing value yields the zero time, which is what the caller would have
+// seen anyway.
+func parseTime(v string) time.Time {
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}

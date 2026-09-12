@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -159,19 +160,36 @@ func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 		created bool
 	)
 
-	if req.Memory != "" {
+	switch {
+	case req.Memory != "":
 		slug, err = s.resolveRef(req.Project, dir, req.Memory)
-		if err != nil {
+		switch {
+		case err == nil:
+			raw, err := os.ReadFile(filepath.Join(dir, slug+memoryExt))
+			if err != nil {
+				return nil, false, fmt.Errorf("read memory %q: %w", slug, err)
+			}
+			if doc, err = markdown.Parse(raw); err != nil {
+				return nil, false, fmt.Errorf("parse memory %q: %w", slug, err)
+			}
+
+		// A slug the caller named but that does not exist yet is a create, not
+		// an error: callers keep well-known memories ("todo", "decisions") at a
+		// fixed slug, and the first write to one must not have to be a special
+		// case. An id-shaped ref still fails, since an id cannot be chosen.
+		case errors.Is(err, ErrNotFound) && markdown.ValidSlug(req.Memory):
+			slug = req.Memory
+			doc = &markdown.Memory{ID: markdown.NewID(), Created: now, Extra: map[string]any{}}
+			created = true
+			if strings.TrimSpace(req.Title) == "" {
+				doc.Title = titleFromSlug(slug)
+			}
+
+		default:
 			return nil, false, err
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, slug+memoryExt))
-		if err != nil {
-			return nil, false, fmt.Errorf("read memory %q: %w", slug, err)
-		}
-		if doc, err = markdown.Parse(raw); err != nil {
-			return nil, false, fmt.Errorf("parse memory %q: %w", slug, err)
-		}
-	} else {
+
+	default:
 		slug, err = s.uniqueSlug(dir, req.Title)
 		if err != nil {
 			return nil, false, err
@@ -342,4 +360,14 @@ func normaliseList(in []string) []string {
 // to be spelled exactly as the tag was stored.
 func hasTag(tags []string, tag string) bool {
 	return slices.Contains(tags, strings.ToLower(strings.TrimSpace(tag)))
+}
+
+// titleFromSlug gives a memory created at a caller-chosen slug a readable
+// title when none was supplied: "dev-log" becomes "Dev Log".
+func titleFromSlug(slug string) string {
+	words := strings.FieldsFunc(slug, func(r rune) bool { return r == '-' || r == '_' })
+	for i, w := range words {
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	return strings.Join(words, " ")
 }
