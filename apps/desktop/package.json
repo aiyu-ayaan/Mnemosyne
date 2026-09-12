@@ -1,0 +1,29 @@
+{
+  "name": "@mnemosyne/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron + React desktop app for Mnemosyne",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k -n vite,electron \"vite\" \"electron .\"",
+    "build": "tsc --noEmit && vite build",
+    "test": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.1",
+    "electron": "^38.4.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.0"
+  }
+}

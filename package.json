@@ -9,6 +9,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
-    "dev": "pnpm --filter @mnemosyne/backend dev"
+    "dev": "pnpm --filter @mnemosyne/desktop dev",
+    "dev:backend": "pnpm --filter @mnemosyne/backend dev"
   }
 }

@@ -3,6 +3,70 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 7 — The desktop shell
+
+`apps/desktop`: Electron, React, TypeScript, Vite, Tailwind v4, and a
+`mnemosyne channel` command to bridge them. Phase 2 complete.
+
+- The main process is the only thing with Node. It resolves the daemon, starts
+  one if none is answering, and speaks HTTP over the channel; the renderer gets
+  four calls and two subscriptions through a preload bridge.
+- The layout is the one in `ui-design.md`: activity bar, collapsible sidebar
+  with Explorer/Search/Graph/MCP/Settings, editor tabs, a four-tab bottom panel,
+  and a status bar. Dark by default, light as a root-class override.
+- The editor is a frontmatter form over a Markdown textarea. Tabs carry dirty
+  state, and closing a dirty tab or deleting anything asks first.
+- Settings moves the memory root through `PUT /v1/settings`, which the daemon
+  applies without a restart.
+
+**Decisions taken here**
+
+- *`mnemosyne channel --json` instead of reimplementing path resolution in
+  TypeScript.* Root resolution, portable detection, and per-platform endpoint
+  naming already exist in Go. One subprocess call means the app and the backend
+  cannot disagree about where the daemon is.
+- *HTTP over `socketPath`, not a custom protocol.* Node's `http` accepts both a
+  Windows named pipe and a unix socket there, so the same client code serves
+  both platforms and the payload is the same JSON the API already speaks.
+- *The main process is plain CommonJS.* The renderer is where the application
+  lives and where TypeScript earns its keep; a second build pipeline to
+  transpile two small files would be more machinery than the files are long.
+- *A textarea, not a code editor component.* The files are Markdown the user can
+  open in their own editor, and syntax highlighting a memory does not justify
+  the dependency. Revisit if editing turns out to be where people live.
+- *Inline SVG, not an icon package.* Five icons and a chevron.
+- *A `Prompt` modal rather than `window.prompt`.* Electron does not implement
+  `prompt`, and a delete that silently did nothing because a dialog returned
+  undefined would be a data-loss bug.
+- *Library metadata is fetched for every project up front.* That is what makes
+  global tag counts and quick-open work without a second index in the renderer;
+  no bodies are fetched. Marked with a `ponytail:` comment and the upgrade path
+  — one aggregate endpoint — if a root ever holds enough projects to notice.
+- *Events are coalesced before a refetch.* One write publishes twice (the write,
+  then the reindex), so reloading per event would refetch the library several
+  times for one user action.
+- *The daemon is left running when the window closes.* It is the same per-user
+  process the logon entry starts, and an agent's session may be relying on it.
+- *The renderer loads the build when no dev server answers.* `electron .` after
+  a build shows the app instead of a blank window, which is also how this stage
+  was verified.
+- *Phase 3 and 4 routes are called and their absence tolerated.* The search
+  view offers semantic ranking only if `/v1/embeddings` says it is available,
+  and the Backlinks panel treats a missing route as an empty list, so the
+  window lights up as those phases land rather than needing a rewrite.
+
+**Also here:** `.gitignore` had a bare `mnemosyne` pattern for the built binary,
+which also matched `cmd/mnemosyne/` — so `main.go` had never been committed. The
+patterns are anchored now, and `apps/desktop/dist/` is ignored.
+
+**Verified:** `pnpm build` and `pnpm test` green across the workspace (`tsc
+--noEmit` for the renderer, `go test ./...` for the backend). Then for real: two
+memories were hand-written as Markdown into a scratch root, `doctor` found both
+through reconcile, the Electron app started its own daemon and loaded the UI
+with no renderer errors, and a script using the same Node `socketPath` path the
+main process uses read `/v1/health`, `/v1/projects`, and `/v1/search?q=vectors`
+over the named pipe — the last returning the hand-written memory.
+
 ## Stage 6 — The daemon, the local channel, and the JSON API
 
 `internal/events`, `internal/api`, `internal/channel`, `internal/daemon`,

@@ -1,2 +1,8 @@
 packages:
   - apps/*
+
+# electron downloads its runtime and esbuild its platform binary from a
+# postinstall script. pnpm blocks build scripts unless they are approved here.
+allowBuilds:
+  electron: true
+  esbuild: true

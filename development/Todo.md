@@ -66,11 +66,15 @@ to talk to it is a process that burns memory and does nothing.
 - [x] **2.5 Change events** — `internal/events` bus, pushed over SSE at `/v1/events`
 - [x] **2.6 File watcher** — a reconcile ticker in the daemon, so an external edit
       reindexes and reaches connected clients as the same event a write would
-- [ ] **2.7 Electron + React + TS + Vite + Tailwind shell**
-- [ ] **2.8 VS Code–style layout** — see [`devdocs/ui-design.md`](devdocs/ui-design.md):
-      activity bar, collapsible sidebar, editor tabs, bottom panel, status bar, dark-first
-- [ ] **2.9 Memory editor** — Markdown editing with frontmatter form
-- [ ] **2.10 Settings** — configurable memory root, matching the backend's config
+- [x] **2.7 Electron + React + TS + Vite + Tailwind shell** — `apps/desktop`; the
+      main process bridges the channel, the renderer has no Node access at all
+- [x] **2.8 VS Code–style layout** — see [`devdocs/ui-design.md`](devdocs/ui-design.md):
+      activity bar, collapsible sidebar, editor tabs, bottom panel, status bar, dark-first,
+      plus `Ctrl+P`, `Ctrl+Shift+F`, `Ctrl+B`, `Ctrl+J`, `Ctrl+S`, `Ctrl+W`
+- [x] **2.9 Memory editor** — title, tags, and links as a form over a Markdown
+      body; dirty tabs, discard confirmation, delete confirmation
+- [x] **2.10 Settings** — memory root with a native picker, applied live by the
+      daemon; theme toggle; installation details
 
 ---
 
