@@ -60,7 +60,7 @@ binary's own `main.go` had never been committed. The patterns are now anchored.
 ./...` passing, including a daemon test that runs over the real platform channel
 and an API test asserting a write arrives on the SSE stream. Then for real: a
 daemon started against a scratch root, `service status` reached it over
-`\.\pipe\mnemosyne.<user>` and reported the root it was serving, and
+`\\.\pipe\mnemosyne.<user>` and reported the root it was serving, and
 reported "not reachable" with the missing token path once it was stopped.
 
 ## Stage 5 — Portable mode, install, and PATH
