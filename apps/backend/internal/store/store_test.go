@@ -14,6 +14,9 @@ func newStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	// Windows will not remove an open database file, so the index has to be
+	// closed before TempDir cleanup runs.
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 

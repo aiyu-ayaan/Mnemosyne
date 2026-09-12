@@ -209,7 +209,9 @@ func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 		return nil, false, err
 	}
 
-	return &Memory{Meta: metaFrom(req.Project, slug, doc), Body: doc.Body}, created, nil
+	written := &Memory{Meta: metaFrom(req.Project, slug, doc), Body: doc.Body}
+	s.reindex(written)
+	return written, created, nil
 }
 
 // DeleteMemory removes a memory file. It is not recoverable until backups land.
@@ -229,6 +231,7 @@ func (s *Store) DeleteMemory(project, ref string) error {
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("memory %q in project %q: %w", ref, project, ErrNotFound)
 	}
+	s.unindex(project, slug)
 	return nil
 }
 

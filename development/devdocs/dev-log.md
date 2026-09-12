@@ -3,6 +3,37 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 2 — Search index
+
+`internal/index` (SQLite + FTS5) and its wiring into the store.
+
+- Schema: a `memories` table for metadata and file stat values, plus an
+  `memories_fts` virtual table over title, tags, and body, joined by rowid.
+- `Store.Open` now opens the index and reconciles it; `Store.Close` releases it.
+- Writes and deletes update the index in place. `Store.Search` returns ranked
+  hits with snippets.
+
+**Verified:** `go vet ./...` clean, `go test ./...` passing — 12 new search and
+reconcile tests, including an index deleted from under a live root rebuilding
+itself from the files.
+
+**Decisions taken here**
+
+- *`index` must not import `store`.* The store owns the index and converts its
+  own types into `index.Record`; the reverse would be an import cycle.
+- *Index failures on write are logged, not returned.* The memory is already on
+  disk. Failing a write that succeeded would be a worse lie than a search result
+  that is missing until the next reconcile.
+- *Reconcile compares mtime and size.* Startup then costs time proportional to
+  what changed rather than to how much is stored.
+- *Invalid FTS5 syntax is retried as quoted phrases.* An agent searching for
+  `C++` should get results, not a lecture about a query language it never saw.
+- *A query of pure punctuation is an error, not zero results.* Caught while
+  writing the test for `*`: returning an empty list would read as "no memory
+  matches" and send the caller looking for content that was never searched for.
+- *Tests close the store.* Windows will not delete an open database file, so
+  `t.Cleanup` closing the index is what makes `t.TempDir` cleanup work.
+
 ## Stage 1 — Workspace and storage layer
 
 The repo became a pnpm workspace and grew its first two packages.

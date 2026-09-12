@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/aiyu-ayaan/mnemosyne/internal/index"
 	"github.com/aiyu-ayaan/mnemosyne/internal/markdown"
 )
 
@@ -26,9 +28,10 @@ const projectFile = "project.json"
 // with errors.Is to turn it into their own transport's not-found response.
 var ErrNotFound = errors.New("not found")
 
-// Store owns a memory root directory.
+// Store owns a memory root directory and the search index derived from it.
 type Store struct {
-	root string
+	root  string
+	index *index.Index
 }
 
 // Project is a directory of memories.
@@ -41,7 +44,12 @@ type Project struct {
 	MemoryCount int       `json:"memoryCount"`
 }
 
-// Open prepares root for use, creating it if it does not exist.
+// Open prepares root for use, creating it if it does not exist, opens the
+// search index, and reconciles it with what is on disk.
+//
+// A failure to open the index is reported but not fatal: without it the store
+// still reads and writes memories, and only search stops working. The files are
+// what matter.
 func Open(root string) (*Store, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -50,7 +58,30 @@ func Open(root string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(abs, InternalDir), 0o755); err != nil {
 		return nil, fmt.Errorf("create memory root: %w", err)
 	}
-	return &Store{root: abs}, nil
+
+	s := &Store{root: abs}
+
+	ix, err := index.Open(s.InternalPath(IndexFile))
+	if err != nil {
+		slog.Warn("search index unavailable", "err", err)
+		return s, nil
+	}
+	s.index = ix
+
+	if _, err := s.Reconcile(); err != nil {
+		slog.Warn("could not reconcile the search index", "err", err)
+	}
+	return s, nil
+}
+
+// Close releases the search index. The memory files need no closing.
+func (s *Store) Close() error {
+	if s.index == nil {
+		return nil
+	}
+	err := s.index.Close()
+	s.index = nil
+	return err
 }
 
 // Root is the absolute path of the memory root.
@@ -180,6 +211,11 @@ func (s *Store) DeleteProject(project string) error {
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("delete project %q: %w", project, err)
+	}
+	if s.index != nil {
+		if err := s.index.DeleteProject(project); err != nil {
+			slog.Warn("could not clear project from index", "project", project, "err", err)
+		}
 	}
 	return nil
 }

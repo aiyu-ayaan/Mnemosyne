@@ -24,11 +24,11 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Project create/list/delete
   - [x] Path containment guard (no escaping the memory root)
   - [x] Unit tests
-- [ ] **1.3 Search index** — SQLite (`modernc.org/sqlite`, pure Go) + FTS5
-  - [ ] Schema + migrations
-  - [ ] Index sync on write/delete; full reconcile on startup
-  - [ ] Ranked full-text search with snippets
-  - [ ] Unit tests
+- [x] **1.3 Search index** — SQLite (`modernc.org/sqlite`, pure Go) + FTS5
+  - [x] Schema, created on open
+  - [x] Index sync on write/delete; stat-based reconcile on startup
+  - [x] Ranked full-text search with snippets
+  - [x] Unit tests
 - [ ] **1.4 MCP server** — stdio JSON-RPC via the official Go SDK
   - [ ] Tools: `list_projects`, `list_memories`, `read_memory`, `write_memory`,
         `delete_memory`, `search_memories`
