@@ -7,6 +7,7 @@ type Bridge = {
   info(): Promise<ChannelInfo | null>;
   reveal(target: string): Promise<string>;
   pickDirectory(): Promise<string | null>;
+  installBinary?(): Promise<string>;
   onEvent(handler: (event: ChangeEvent) => void): () => void;
   onFatal(handler: (message: string) => void): () => void;
 };
@@ -50,6 +51,10 @@ export const bridge = {
   info: () => window.mnemosyne.info(),
   reveal: (target: string) => window.mnemosyne.reveal(target),
   pickDirectory: () => window.mnemosyne.pickDirectory(),
+  installBinary: () =>
+    window.mnemosyne.installBinary
+      ? window.mnemosyne.installBinary()
+      : Promise.reject(new Error("installBinary not supported in this environment")),
   onEvent: (handler: (event: ChangeEvent) => void) => window.mnemosyne.onEvent(handler),
   onFatal: (handler: (message: string) => void) => window.mnemosyne.onFatal(handler),
 };

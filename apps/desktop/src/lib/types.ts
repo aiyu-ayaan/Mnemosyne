@@ -73,6 +73,7 @@ export type ChannelInfo = {
   endpoint: string;
   root: string;
   portable: boolean;
+  binaryPath?: string;
 };
 
 export type GraphNode = {

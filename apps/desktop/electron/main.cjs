@@ -283,7 +283,13 @@ function loadRenderer(win, attempt = 0) {
 
 app.whenReady().then(async () => {
   ipcMain.handle(`${CHANNEL}:request`, (_e, method, urlPath, body) => request(method, urlPath, body));
-  ipcMain.handle(`${CHANNEL}:info`, () => channelInfo);
+  ipcMain.handle(`${CHANNEL}:info`, () => {
+    if (!channelInfo) return null;
+    return {
+      ...channelInfo,
+      binaryPath: findBinary(),
+    };
+  });
   ipcMain.handle(`${CHANNEL}:reveal`, (_e, target) => shell.openPath(target));
   ipcMain.handle(`${CHANNEL}:pickDirectory`, async () => {
     const result = await dialog.showOpenDialog({
@@ -291,6 +297,18 @@ app.whenReady().then(async () => {
       properties: ["openDirectory", "createDirectory"],
     });
     return result.canceled ? null : result.filePaths[0];
+  });
+  ipcMain.handle(`${CHANNEL}:installBinary`, async () => {
+    const bin = findBinary();
+    return new Promise((resolve, reject) => {
+      execFile(bin, ["install"], { timeout: 15_000 }, (err, stdout, stderr) => {
+        if (err) {
+          reject(new Error(stderr || stdout || err.message));
+        } else {
+          resolve(stdout || "Installed binary and updated PATH");
+        }
+      });
+    });
   });
 
   const win = createWindow();

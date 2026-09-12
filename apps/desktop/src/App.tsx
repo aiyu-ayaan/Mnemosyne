@@ -523,7 +523,11 @@ export default function App() {
                 }}
               />
             ) : mainMode === "mcp" ? (
-              <McpView health={library.health} endpoint={channel?.endpoint ?? null} />
+              <McpView
+                health={library.health}
+                endpoint={channel?.endpoint ?? null}
+                binaryPath={channel?.binaryPath ?? null}
+              />
             ) : mainMode === "theme" ? (
               <ThemeView theme={theme} onTheme={setTheme} />
             ) : mainMode === "settings" ? (

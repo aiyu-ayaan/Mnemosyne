@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld(CHANNEL, {
   /** Native directory picker for the memory root. Resolves null if cancelled. */
   pickDirectory: () => ipcRenderer.invoke(`${CHANNEL}:pickDirectory`),
 
+  /** Runs mnemosyne install to place binary in Programs and update user PATH. */
+  installBinary: () => ipcRenderer.invoke(`${CHANNEL}:installBinary`),
+
   /**
    * Subscribes to daemon change events. Returns an unsubscribe function.
    * @param {(event: {kind: string, project?: string, memory?: string}) => void} handler
