@@ -109,6 +109,9 @@ func (s *Store) Reconcile() (int, error) {
 	if changed > 0 {
 		s.bus.Publish(events.Event{Kind: events.IndexReconciled, Count: changed})
 	}
+	if err := s.reconcileVectors(); err != nil {
+		slog.Warn("could not reconcile vectors", "err", err)
+	}
 	return changed, nil
 }
 
@@ -145,6 +148,7 @@ func (s *Store) reindex(m *Memory) {
 	if err := s.indexFile(m.Project, m.Slug, filepath.Join(dir, m.Slug+memoryExt)); err != nil {
 		slog.Warn("could not index memory", "project", m.Project, "memory", m.Slug, "err", err)
 	}
+	go s.embedMemory(m.Project, m.Slug, m.Meta.Title, m.Meta.Tags, m.Body)
 }
 
 // unindex drops a memory from the index after it was deleted from disk.

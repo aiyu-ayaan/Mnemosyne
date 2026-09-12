@@ -44,6 +44,8 @@ export type Health = {
   projects: number;
   memories: number;
   indexBytes: number;
+  embeddings?: boolean;
+  embeddingModel?: string;
 };
 
 export type Settings = {

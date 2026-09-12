@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/aiyu-ayaan/mnemosyne/internal/embed"
 )
 
 // EnvRoot overrides the memory root for a single run.
@@ -25,7 +27,8 @@ const appDir = "mnemosyne"
 
 // Config is the settings file.
 type Config struct {
-	Root string `json:"root,omitempty"`
+	Root  string         `json:"root,omitempty"`
+	Embed embed.Settings `json:"embed,omitempty"`
 }
 
 // Source records where the memory root came from, so `doctor` can explain a

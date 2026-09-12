@@ -113,13 +113,14 @@ func TestToolsAreAdvertised(t *testing.T) {
 	for _, want := range []string{
 		"list_projects", "list_memories", "read_memory",
 		"write_memory", "delete_memory", "search_memories",
+		"recall",
 	} {
 		if !got[want] {
 			t.Errorf("tool %q is not advertised", want)
 		}
 	}
-	if len(res.Tools) != 6 {
-		t.Errorf("advertised %d tools, want exactly 6: %v", len(res.Tools), got)
+	if len(res.Tools) != 7 {
+		t.Errorf("advertised %d tools, want exactly 7: %v", len(res.Tools), got)
 	}
 }
 
@@ -242,6 +243,24 @@ func TestSearchMemories(t *testing.T) {
 	}
 	if found.Results[0].Snippet == "" {
 		t.Error("hit has no snippet")
+	}
+}
+
+func TestRecallMemories(t *testing.T) {
+	session, _ := connect(t)
+
+	call(t, session, "write_memory", map[string]any{
+		"project": "p", "title": "Memory Architecture", "content": "long term recall for agents\n",
+	}, nil)
+
+	var found recallOut
+	call(t, session, "recall", map[string]any{"query": "recall", "project": "p"}, &found)
+
+	if len(found.Results) != 1 {
+		t.Fatalf("results = %+v, want 1", found.Results)
+	}
+	if found.Results[0].Slug != "memory-architecture" {
+		t.Errorf("top hit = %q, want memory-architecture", found.Results[0].Slug)
 	}
 }
 

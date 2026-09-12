@@ -97,6 +97,18 @@ type searchOut struct {
 	Results []index.Hit `json:"results"`
 }
 
+type recallIn struct {
+	Query   string `json:"query" jsonschema:"semantic query or concept to recall"`
+	Project string `json:"project,omitempty" jsonschema:"restrict recall to one project; omit to search across all projects"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"maximum results to return (default 10, max 50)"`
+	Mode    string `json:"mode,omitempty" jsonschema:"search mode: hybrid (default), semantic, or text"`
+}
+
+type recallOut struct {
+	Results []index.Hit `json:"results"`
+}
+
+
 // --- registration ---
 
 func register(srv *mcp.Server, s *store.Store) {
@@ -189,6 +201,18 @@ func register(srv *mcp.Server, s *store.Store) {
 			return nil, searchOut{}, err
 		}
 		return nil, searchOut{Results: hits}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "recall",
+		Description: "Recall memories using semantic understanding and hybrid ranking. " +
+			"Supports hybrid (default), semantic, and text modes.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in recallIn) (*mcp.CallToolResult, recallOut, error) {
+		hits, err := s.Recall(ctx, in.Query, in.Project, clamp(in.Limit, defaultSearchLimit, maxSearchLimit), in.Mode)
+		if err != nil {
+			return nil, recallOut{}, err
+		}
+		return nil, recallOut{Results: hits}, nil
 	})
 }
 

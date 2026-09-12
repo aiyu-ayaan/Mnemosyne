@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aiyu-ayaan/mnemosyne/internal/embed"
 	"github.com/aiyu-ayaan/mnemosyne/internal/events"
 	"github.com/aiyu-ayaan/mnemosyne/internal/index"
 	"github.com/aiyu-ayaan/mnemosyne/internal/markdown"
@@ -39,6 +40,17 @@ type Store struct {
 	root  string
 	index *index.Index
 	bus   *events.Bus
+	embed embed.Provider
+}
+
+// SetEmbedder configures the embedding provider for semantic and hybrid search.
+func (s *Store) SetEmbedder(p embed.Provider) {
+	s.embed = p
+}
+
+// Embedder returns the active embedding provider, or nil if none is configured.
+func (s *Store) Embedder() embed.Provider {
+	return s.embed
 }
 
 // Project is a directory of memories.

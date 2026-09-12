@@ -79,7 +79,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
     body,
     tokenize = 'porter unicode61'
 );
-`
+` + vectorSchema
+
 
 // Open opens or creates the index at path.
 func Open(path string) (*Index, error) {
@@ -349,3 +350,30 @@ func format(t time.Time) string {
 	}
 	return t.UTC().Format(time.RFC3339)
 }
+
+// GetHit returns a Hit for a specific memory, populated from the SQLite index.
+func (ix *Index) GetHit(project, slug string) (Hit, error) {
+	var (
+		h    Hit
+		tags string
+		body string
+	)
+	err := ix.db.QueryRow(`
+		SELECT m.project, m.slug, m.id, m.title, m.tags, f.body
+		FROM memories m
+		JOIN memories_fts f ON f.rowid = m.rowid
+		WHERE m.project = ? AND m.slug = ?`, project, slug).Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &body)
+	if err != nil {
+		return Hit{}, err
+	}
+	if tags != "" {
+		h.Tags = strings.Fields(tags)
+	}
+	snippet := strings.TrimSpace(body)
+	if len(snippet) > 160 {
+		snippet = snippet[:157] + "..."
+	}
+	h.Snippet = snippet
+	return h, nil
+}
+

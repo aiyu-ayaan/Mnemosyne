@@ -21,3 +21,7 @@ node_modules/
 
 # Desktop build output
 apps/desktop/dist/
+
+# Agent skills
+.agents/
+

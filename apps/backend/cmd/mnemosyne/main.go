@@ -16,6 +16,7 @@ import (
 
 	"github.com/aiyu-ayaan/mnemosyne/internal/config"
 	"github.com/aiyu-ayaan/mnemosyne/internal/daemon"
+	"github.com/aiyu-ayaan/mnemosyne/internal/embed"
 	"github.com/aiyu-ayaan/mnemosyne/internal/install"
 	"github.com/aiyu-ayaan/mnemosyne/internal/mcpserver"
 	"github.com/aiyu-ayaan/mnemosyne/internal/service"
@@ -122,6 +123,11 @@ func openStore(fs *flag.FlagSet, args []string) (*store.Store, config.Locations,
 	s, err := store.Open(resolved)
 	if err != nil {
 		return nil, loc, "", "", err
+	}
+	if cfg, err := loc.Load(); err == nil {
+		if p, err := embed.New(cfg.Embed); err == nil && p != nil {
+			s.SetEmbedder(p)
+		}
 	}
 	return s, loc, resolved, source, nil
 }

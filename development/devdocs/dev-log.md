@@ -3,6 +3,37 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 8 — Semantic search, embeddings, and hybrid recall
+
+`internal/embed`, `internal/index` vector tables, `internal/store/recall.go`,
+MCP `recall` tool, and `/v1/embeddings` API endpoint. Phase 3 complete.
+
+- `internal/embed` implements a pluggable provider interface with support for
+  local Ollama (`nomic-embed-text`), OpenAI-compatible embedding endpoints, and
+  a no-op `none` provider. Embeddings are L2-normalised so similarity is a fast
+  dot product.
+- `internal/index/vector.go` stores vectors as float32 blobs alongside FTS5 in
+  SQLite, with cascading deletes when memories are removed. `Nearest` scans
+  stored vectors linearly and ranks by cosine similarity.
+- `internal/store/recall.go` implements Reciprocal Rank Fusion (RRF) combining
+  FTS5 lexical matches and vector nearest-neighbour matches. Memories are embedded
+  asynchronously on write and reconciled in batches.
+- MCP server exposes `recall` tool accepting `query`, `project`, `limit`, and
+  `mode` (`hybrid`, `semantic`, `text`).
+- API serves `GET /v1/embeddings` and supports `mode` query parameter on `GET /v1/search`.
+
+**Decisions taken here**
+
+- *Pure-Go vector table over cgo sqlite-vec.* Linear scan over float32 blobs
+  executes in single-digit milliseconds for thousands of vectors while keeping
+  pure-Go compilation and zero cgo complexity across all platforms.
+- *Async embedding on memory write.* `WriteMemory` writes to disk and updates FTS5
+  synchronously, firing embedding asynchronously so slow or offline embedding
+  providers never block memory creation.
+- *Reciprocal Rank Fusion with k=60.* Standard RRF formula merges disparate score
+  distributions from BM25 and cosine distance robustly without needing ad-hoc
+  score calibration.
+
 ## Stage 7 — The desktop shell
 
 `apps/desktop`: Electron, React, TypeScript, Vite, Tailwind v4, and a

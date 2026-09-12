@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/aiyu-ayaan/mnemosyne/internal/config"
+	"github.com/aiyu-ayaan/mnemosyne/internal/embed"
 	"github.com/aiyu-ayaan/mnemosyne/internal/events"
 	"github.com/aiyu-ayaan/mnemosyne/internal/mcpserver"
 	"github.com/aiyu-ayaan/mnemosyne/internal/store"
@@ -29,22 +30,20 @@ import (
 // Limits mirror the MCP tool limits, for the same reason: a client that guesses
 // a number gets a sane answer instead of an error.
 const (
-	defaultListLimit   = 200
-	maxListLimit       = 2000
-	defaultSearchLimit = 20
-	maxSearchLimit     = 200
+	defaultListLimit   = 50
+	maxListLimit       = 500
+	defaultSearchLimit = 10
+	maxSearchLimit     = 50
 )
 
 // heartbeat keeps an idle SSE connection from being closed by an intermediary
 // and tells the client the daemon is still alive.
 const heartbeat = 25 * time.Second
 
-// Server holds the store behind a lock so that changing the memory root can
-// swap it without restarting the daemon.
+// Server exposes the store over HTTP. It is safe for concurrent use.
 type Server struct {
 	mu    sync.RWMutex
 	store *store.Store
-
 	loc   config.Locations
 	token string
 	bus   *events.Bus
@@ -54,6 +53,13 @@ type Server struct {
 // New wraps s. loc is where settings are read and written; token, when not
 // empty, is required on every request as a bearer token.
 func New(s *store.Store, loc config.Locations, token string) *Server {
+	if s.Embedder() == nil {
+		if cfg, err := loc.Load(); err == nil {
+			if p, err := embed.New(cfg.Embed); err == nil && p != nil {
+				s.SetEmbedder(p)
+			}
+		}
+	}
 	srv := &Server{store: s, loc: loc, token: token, bus: s.Events()}
 	srv.routes()
 	return srv
@@ -110,6 +116,7 @@ func (srv *Server) routes() {
 	mux.HandleFunc("DELETE /v1/projects/{project}/memories/{memory}", srv.deleteMemory)
 
 	mux.HandleFunc("GET /v1/search", srv.search)
+	mux.HandleFunc("GET /v1/embeddings", srv.getEmbeddings)
 
 	mux.HandleFunc("GET /v1/settings", srv.getSettings)
 	mux.HandleFunc("PUT /v1/settings", srv.putSettings)
@@ -120,22 +127,29 @@ func (srv *Server) routes() {
 // --- health and settings ---
 
 type healthOut struct {
-	Version    string `json:"version"`
-	Root       string `json:"root"`
-	Portable   bool   `json:"portable"`
-	ConfigPath string `json:"configPath"`
-	Projects   int    `json:"projects"`
-	Memories   int    `json:"memories"`
-	IndexBytes int64  `json:"indexBytes"`
+	Version        string `json:"version"`
+	Root           string `json:"root"`
+	Portable       bool   `json:"portable"`
+	ConfigPath     string `json:"configPath"`
+	Projects       int    `json:"projects"`
+	Memories       int    `json:"memories"`
+	IndexBytes     int64  `json:"indexBytes"`
+	Embeddings     bool   `json:"embeddings"`
+	EmbeddingModel string `json:"embeddingModel,omitempty"`
 }
 
-func (srv *Server) health(w http.ResponseWriter, _ *http.Request) {
+func (srv *Server) health(w http.ResponseWriter, r *http.Request) {
 	s := srv.Store()
 	out := healthOut{
 		Version:    mcpserver.Version,
 		Root:       s.Root(),
 		Portable:   srv.loc.Portable,
 		ConfigPath: srv.loc.ConfigPath,
+	}
+
+	if embedder := s.Embedder(); embedder != nil {
+		out.Embeddings = (embedder.Available(r.Context()) == nil)
+		out.EmbeddingModel = embedder.Model()
 	}
 
 	projects, err := s.ListProjects()
@@ -349,16 +363,42 @@ func (srv *Server) deleteMemory(w http.ResponseWriter, r *http.Request) {
 
 func (srv *Server) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	hits, err := srv.Store().Search(
+	mode := q.Get("mode")
+	hits, err := srv.Store().Recall(
+		r.Context(),
 		q.Get("q"),
 		q.Get("project"),
 		clamp(intParam(q.Get("limit")), defaultSearchLimit, maxSearchLimit),
+		mode,
 	)
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"results": hits})
+}
+
+// --- embeddings ---
+
+type embeddingsOut struct {
+	Available bool   `json:"available"`
+	Provider  string `json:"provider"`
+	Model     string `json:"model,omitempty"`
+}
+
+func (srv *Server) getEmbeddings(w http.ResponseWriter, r *http.Request) {
+	s := srv.Store()
+	embedder := s.Embedder()
+	if embedder == nil {
+		writeJSON(w, http.StatusOK, embeddingsOut{Available: false, Provider: "none"})
+		return
+	}
+	available := embedder.Available(r.Context()) == nil
+	writeJSON(w, http.StatusOK, embeddingsOut{
+		Available: available,
+		Provider:  embedder.Model(),
+		Model:     embedder.Model(),
+	})
 }
 
 // --- events ---

@@ -80,11 +80,10 @@ to talk to it is a process that burns memory and does nothing.
 
 ## Phase 3 — Search that understands meaning
 
-- [ ] **3.1 `sqlite-vec`** — vector table alongside FTS5 (needs cgo or a loadable
-      extension; that build-system cost is exactly why it is not in the MVP)
-- [ ] **3.2 Embeddings** — local model by default, pluggable provider
-- [ ] **3.3 Hybrid ranking** — reciprocal-rank fusion over FTS5 + vector hits
-- [ ] **3.4 `recall` MCP tool** — semantic entry point for agents
+- [x] **3.1 `sqlite-vec` / vector table** — vector table alongside FTS5 (pure-Go cosine search over normalised float32 blobs, cascade delete, content hashing)
+- [x] **3.2 Embeddings** — local model (Ollama) by default, pluggable provider (OpenAI-compatible, none), unit normalisation
+- [x] **3.3 Hybrid ranking** — reciprocal-rank fusion over FTS5 + vector hits, async embedding on write, batch reconcile
+- [x] **3.4 `recall` MCP tool** — semantic entry point for agents (`recall`), `/v1/embeddings` endpoint, hybrid search in desktop UI
 
 ---
 

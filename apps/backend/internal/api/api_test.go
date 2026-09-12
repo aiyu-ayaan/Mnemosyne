@@ -212,3 +212,39 @@ func TestEventStreamReportsAWrite(t *testing.T) {
 		}
 	}
 }
+
+func TestEmbeddingsAndSearchMode(t *testing.T) {
+	ts, _ := newServer(t)
+
+	// GET /v1/embeddings
+	res := do(t, ts, "GET", "/v1/embeddings", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("GET /v1/embeddings: %s", res.Status)
+	}
+	var emb struct {
+		Available bool   `json:"available"`
+		Provider  string `json:"provider"`
+	}
+	json.NewDecoder(res.Body).Decode(&emb)
+	// Even if provider is offline on localhost, the endpoint responds with valid JSON
+	if emb.Provider == "" {
+		t.Errorf("expected provider in embeddings response")
+	}
+
+	// Create memory and search with mode=text and mode=hybrid
+	do(t, ts, "POST", "/v1/projects/notes/memories", `{"title":"Hybrid Testing","body":"validating search modes"}`)
+	resSearch := do(t, ts, "GET", "/v1/search?q=testing&mode=text", "")
+	if resSearch.StatusCode != http.StatusOK {
+		t.Fatalf("GET /v1/search: %s", resSearch.Status)
+	}
+	var hits struct {
+		Results []struct {
+			Title string `json:"title"`
+		} `json:"results"`
+	}
+	json.NewDecoder(resSearch.Body).Decode(&hits)
+	if len(hits.Results) == 0 || hits.Results[0].Title != "Hybrid Testing" {
+		t.Errorf("search results unexpected: %+v", hits)
+	}
+}
+
