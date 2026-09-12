@@ -67,7 +67,7 @@ one identifier, not two.
 | `WriteMemory` :168 | Currently `filepath.Join(dir, slug+memoryExt)`, bypassing the containment guard. Must call `memoryPath`. |
 | `resolveRef` :266, :290 | The same two fixes: `ValidPath`, and `memoryPath` instead of a raw join. |
 | `DeleteMemory` | After removing the file, prune parent directories that are now empty, stopping at the project directory. |
-| `uniqueSlug` | Collision suffixes apply to the final segment only. |
+| `uniqueSlug` | Unchanged. It is reached only when the caller supplied no `memory`, which creates a flat memory from the title, so it never sees a path. |
 
 Routing both remaining raw joins through `memoryPath` is the part of this
 section that matters most: it is the containment guard, and today two call
@@ -96,15 +96,18 @@ DELETE /v1/projects/{project}/memories/{memory...}
 GET    /v1/backlinks?project={project}&memory={memory}
 ```
 
-Backlinks moves to a query-parameter route. `apps/desktop` is the only caller
-and is updated in the same commit. This is the one breaking change in the spec,
-and it is forced rather than chosen.
+Backlinks moves to a query-parameter route; the old path-suffix route is
+removed rather than kept as an alias, because leaving it registered is what
+would break the wildcard. `apps/desktop` is the only caller and is updated in
+the same commit. This is the one breaking change in the spec, and it is forced
+rather than chosen.
 
 ### MCP
 
-No signature changes. `project` and `memory` arguments already take strings;
-they now accept a path. Tool descriptions say so, and the server `instructions`
-gain the section convention described below.
+Nesting adds no arguments. `project` and `memory` already take strings; they now
+accept a path. Tool descriptions say so, and the server `instructions` gain the
+section convention described below. (Section 2 does add a `code` argument, for
+its own reasons.)
 
 ---
 
@@ -131,6 +134,12 @@ nothing reads it, indexes it, or draws it. This promotes it to a known key.
 A ref is `<path>#<symbol>`, with `#<symbol>` optional. The path is
 repo-relative, and Mnemosyne does not resolve it itself — CodeGraph does, which
 is why the format is what `codegraph query` already accepts.
+
+**A ref is not a slug and is never validated as one.** It contains `/`, `.` and
+`#`, all of which `ValidSlug` rejects by design. Refs are opaque strings:
+trimmed, deduplicated, stored and handed to CodeGraph verbatim. They never
+reach the filesystem, so the path guards that protect slugs do not apply and
+must not be borrowed here.
 
 ### `markdown`
 
