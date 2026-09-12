@@ -395,3 +395,56 @@ func TestContextCancellationIsHonoured(t *testing.T) {
 		t.Error("CallTool with a cancelled context succeeded")
 	}
 }
+
+// The discoverability contract: an agent only uses Mnemosyne unprompted if the
+// server tells it to, and a client only auto-approves a read if the tool says
+// it is one. Both are easy to drop when editing tool definitions, so pin them.
+func TestDiscoverability(t *testing.T) {
+	session, _ := connect(t)
+
+	if got := session.InitializeResult().Instructions; got != Instructions {
+		t.Fatalf("server instructions not sent to the client (got %d bytes, want %d)", len(got), len(Instructions))
+	}
+
+	want := map[string]bool{ // tool -> read-only
+		"list_projects": true, "list_memories": true, "read_memory": true,
+		"search_memories": true, "recall": true, "read_backlinks": true,
+		"write_memory": false, "delete_memory": false,
+	}
+
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, tool := range tools.Tools {
+		readOnly, known := want[tool.Name]
+		if !known {
+			t.Errorf("%s: undeclared tool - add it to this test with its read-only status", tool.Name)
+			continue
+		}
+		seen[tool.Name] = true
+		if tool.Annotations == nil {
+			t.Errorf("%s: no annotations", tool.Name)
+			continue
+		}
+		if tool.Annotations.ReadOnlyHint != readOnly {
+			t.Errorf("%s: ReadOnlyHint = %v, want %v", tool.Name, tool.Annotations.ReadOnlyHint, readOnly)
+		}
+		if tool.Title == "" {
+			t.Errorf("%s: no title", tool.Name)
+		}
+		if len(tool.Description) < 80 {
+			t.Errorf("%s: description is %d chars - too short to tell an agent when to call it", tool.Name, len(tool.Description))
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("%s: not registered", name)
+		}
+	}
+
+	if d := destroying; d.DestructiveHint == nil || !*d.DestructiveHint {
+		t.Error("delete_memory must be annotated destructive")
+	}
+}
