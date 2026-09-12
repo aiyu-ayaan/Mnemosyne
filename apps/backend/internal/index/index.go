@@ -308,19 +308,29 @@ func (ix *Index) Search(query, project string, limit int) ([]Hit, error) {
 		return nil, fmt.Errorf("query %q has no searchable terms", query)
 	}
 
+	// The raw query goes first so anyone writing real FTS5 — NEAR, a prefix*,
+	// an explicit OR — gets what they asked for.
 	hits, err := ix.search(query, project, limit)
-	if err == nil {
+	if err == nil && len(hits) > 0 {
 		return hits, nil
 	}
 
-	// The query was not valid FTS5 syntax — a bare "C++" or an unbalanced
-	// quote, say. Re-run it as literal phrases rather than making the caller
-	// learn the query language.
-	hits, retryErr := ix.search(literal, project, limit)
-	if retryErr != nil {
-		return nil, fmt.Errorf("search %q: %w", query, err)
+	// Nothing came back, or the query was not valid FTS5 syntax (a bare "C++",
+	// an unbalanced quote). Both land here, and both are usually a sentence:
+	// raw FTS5 ANDs its terms, so one unmatched word in "how do we write commit
+	// messages" returns nothing. Retry as quoted terms joined with OR, ranked
+	// by bm25, rather than making the caller learn the query language.
+	if literal == query {
+		return hits, err
 	}
-	return hits, nil
+	retried, retryErr := ix.search(literal, project, limit)
+	if retryErr != nil {
+		if err != nil {
+			return nil, fmt.Errorf("search %q: %w", query, err)
+		}
+		return hits, nil
+	}
+	return retried, nil
 }
 
 func (ix *Index) search(match, project string, limit int) ([]Hit, error) {
@@ -370,6 +380,11 @@ func (ix *Index) search(match, project string, limit int) ([]Hit, error) {
 
 // quoteTerms turns arbitrary user text into a valid FTS5 query by wrapping each
 // word in double quotes, which makes every term a literal phrase.
+//
+// The terms are joined with OR, not FTS5's implicit AND. Agents ask in whole
+// sentences - "how do we write commit messages" - and under AND a single word
+// absent from every memory returns nothing at all. OR still ranks correctly:
+// bm25 puts the memories matching the most terms first.
 func quoteTerms(query string) string {
 	terms := []string{}
 	for field := range strings.FieldsSeq(query) {
@@ -379,7 +394,7 @@ func quoteTerms(query string) string {
 		}
 		terms = append(terms, `"`+strings.ReplaceAll(cleaned, `"`, `""`)+`"`)
 	}
-	return strings.Join(terms, " ")
+	return strings.Join(terms, " OR ")
 }
 
 func format(t time.Time) string {
