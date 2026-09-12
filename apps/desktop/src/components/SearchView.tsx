@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Project } from "../lib/types";
+import { FilterIcon, FolderIcon, SearchIcon, SparklesIcon } from "./Icons";
 
 export type SearchMode = "text" | "semantic" | "hybrid";
 
@@ -28,8 +29,6 @@ export default function SearchView({
   const input = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
 
-  // The view is only mounted when Search is selected, so focusing on mount is
-  // what makes Ctrl+Shift+F land in the box.
   useEffect(() => {
     input.current?.focus();
     input.current?.select();
@@ -37,77 +36,128 @@ export default function SearchView({
 
   return (
     <form
-      className="flex h-full flex-col gap-2 p-2"
+      className="flex h-full flex-col gap-3 p-3 text-ink-dim select-none"
       onSubmit={(e) => {
         e.preventDefault();
         setTouched(true);
         onSubmit();
       }}
     >
-      <h2 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-dim">Search</h2>
+      <div className="flex items-center justify-between border-b border-line pb-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink">Search</h2>
+      </div>
 
-      <input
-        ref={input}
-        value={query}
-        onChange={(e) => onChange({ query: e.target.value, project, mode })}
-        placeholder="Search memories"
-        aria-label="Search memories"
-        className="w-full rounded border border-line bg-editor px-2 py-1 text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
-      />
+      {/* Search Input Box */}
+      <div className="relative flex items-center">
+        <input
+          ref={input}
+          value={query}
+          onChange={(e) => onChange({ query: e.target.value, project, mode })}
+          placeholder="Search memories (Ctrl+Shift+F)..."
+          aria-label="Search memories"
+          className="w-full rounded-md border border-line bg-editor px-3 py-1.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => onChange({ query: "", project, mode })}
+            className="absolute right-2 text-xs text-ink-faint hover:text-ink"
+          >
+            ✕
+          </button>
+        )}
+      </div>
 
-      <label className="flex flex-col gap-1 px-1 text-ink-dim">
-        Project
+      {/* Project Scope Filter */}
+      <div className="flex flex-col gap-1">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-ink">
+          <FolderIcon className="h-3.5 w-3.5 text-accent" />
+          <span>Project Scope</span>
+        </label>
         <select
           value={project}
           onChange={(e) => onChange({ query, project: e.target.value, mode })}
-          className="rounded border border-line bg-editor px-1 py-1 text-ink focus:border-accent focus:outline-none"
+          className="w-full rounded-md border border-line bg-editor px-2.5 py-1.5 text-xs text-ink outline-none focus:border-accent"
         >
-          <option value="">All projects</option>
+          <option value="">All Projects</option>
           {projects.map((p) => (
             <option key={p.slug} value={p.slug}>
-              {p.name}
+              {p.name || p.slug} ({p.memoryCount})
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <fieldset className="flex flex-col gap-1 px-1">
-        <legend className="text-ink-dim">Ranking</legend>
-        {(["text", "hybrid", "semantic"] as SearchMode[]).map((value) => {
-          // Semantic and hybrid need an embedding provider. Disabling them with
-          // the reason beats letting the request fail and reporting it late.
-          const disabled = value !== "text" && !semanticAvailable;
-          return (
-            <label
-              key={value}
-              title={disabled ? "No embedding provider is reachable — see Settings" : undefined}
-              className={`flex items-center gap-2 ${disabled ? "text-ink-faint" : "text-ink"}`}
-            >
-              <input
-                type="radio"
-                name="mode"
-                value={value}
-                checked={mode === value}
+      {/* Search Mode Segmented Pills */}
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center justify-between text-xs font-medium text-ink">
+          <div className="flex items-center gap-1.5">
+            <FilterIcon className="h-3.5 w-3.5 text-tag" />
+            <span>Ranking Mode</span>
+          </div>
+          {semanticAvailable && (
+            <span className="flex items-center gap-1 text-[10px] text-tag font-mono">
+              <SparklesIcon className="h-2.5 w-2.5" />
+              AI Embeddings Ready
+            </span>
+          )}
+        </label>
+
+        <div className="grid grid-cols-3 gap-1 rounded-md border border-line bg-raised p-1 text-[11px]">
+          {(
+            [
+              { id: "text", label: "Keyword", desc: "BM25 text match" },
+              { id: "hybrid", label: "Hybrid", desc: "Text + Semantic RRF" },
+              { id: "semantic", label: "Semantic", desc: "Vector similarity" },
+            ] as const
+          ).map(({ id, label, desc }) => {
+            const disabled = id !== "text" && !semanticAvailable;
+            const active = mode === id;
+            return (
+              <button
+                key={id}
+                type="button"
                 disabled={disabled}
-                onChange={() => onChange({ query, project, mode: value })}
-              />
-              {value === "text" ? "Keyword (FTS5)" : value === "hybrid" ? "Hybrid" : "Semantic"}
-            </label>
-          );
-        })}
-      </fieldset>
+                onClick={() => onChange({ query, project, mode: id })}
+                title={
+                  disabled
+                    ? "Embedding provider not reachable. Check settings."
+                    : `${label} search: ${desc}`
+                }
+                className={`flex flex-col items-center rounded py-1 px-1 text-center transition-colors ${
+                  active
+                    ? "bg-selected text-ink font-semibold shadow-xs"
+                    : disabled
+                      ? "opacity-30 cursor-not-allowed text-ink-faint"
+                      : "text-ink-dim hover:bg-hover hover:text-ink"
+                }`}
+              >
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
+      {/* Submit Button */}
       <button
         type="submit"
         disabled={busy || query.trim() === ""}
-        className="rounded bg-accent px-2 py-1 font-medium text-accent-ink disabled:opacity-40"
+        className="mt-1 flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink hover:opacity-95 transition-opacity disabled:opacity-40"
       >
-        {busy ? "Searching…" : "Search"}
+        <SearchIcon className="h-3.5 w-3.5" />
+        <span>{busy ? "Searching…" : "Search"}</span>
       </button>
 
-      <p className="px-1 text-ink-faint">
-        {touched ? "Results are in the panel below." : "Results appear in the panel below."}
-      </p>
+      {/* Search Result Hint */}
+      <div className="mt-auto rounded-md border border-line/60 bg-raised/30 p-2 text-[11px] text-ink-faint">
+        <p className="font-medium text-ink-dim mb-1">Tip</p>
+        <p>
+          {touched
+            ? "Results appear in the bottom Search panel."
+            : "Press Enter or click Search to view ranked results in the panel."}
+        </p>
+      </div>
     </form>
   );
 }

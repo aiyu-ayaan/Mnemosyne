@@ -3,6 +3,27 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 10 — UI/UX overhaul and multi-theme system
+
+Complete UI overhaul implementing `/ui-ux-pro-max` guidelines and a 6-theme system:
+
+- **6 Developer Themes**: VS Code Dark Modern, Obsidian Midnight (OLED Deep Black), Tokyo Night,
+  Nord Arctic Slate, Catppuccin Mocha, and Clean Paper Light.
+- **Instant Theme Switcher**: Available in Status Bar popup and Settings View with live visual color swatches.
+- **Enhanced Markdown Editor**:
+  - View modes: Edit, Split (side-by-side editing and live preview), and Rendered Preview.
+  - Safe Markdown renderer with headings, bold, italic, code blocks with Copy button, blockquotes,
+    checkboxes, bullet lists, and clickable `[[wikilinks]]`.
+  - Rich formatting toolbar for rapid syntax insertion.
+  - Interactive `#tag` chips with remove/add, `[[wikilink]]` pills, word/character/token counters,
+    and save status indicators.
+- **Enhanced Explorer**: Quick filter input, folder icons with open/closed states, tag cloud with count badges,
+  and hover action controls.
+- **Enhanced Graph View**: Obsidian-style physics force tuning HUD (repulsion, spring length, gravity, show labels),
+  dual-mode CodeGraph symbol explorer, and node hover cards.
+- **Enhanced Search & Panel**: Segmented ranking pills (Keyword FTS5, Hybrid RRF, Semantic Vector),
+  expandable bottom panel, badge counters, and formatted event logs.
+
 ## Stage 9 — Graph view, backlinks, and CodeGraph integration
 
 `internal/markdown` link parsing, `internal/index` links table, `internal/store` backlinks and graph,

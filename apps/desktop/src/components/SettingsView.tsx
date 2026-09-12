@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 
 import { api, bridge } from "../lib/bridge";
-import type { Health, Settings } from "../lib/types";
+import { THEMES, type Health, type Settings, type ThemeId } from "../lib/types";
+import { CheckIcon, FolderIcon, PaletteIcon } from "./Icons";
 
 type Props = {
   health: Health | null;
-  theme: "dark" | "light";
-  onTheme: (theme: "dark" | "light") => void;
+  theme: ThemeId;
+  onTheme: (theme: ThemeId) => void;
   onChanged: () => void;
 };
 
@@ -47,16 +48,89 @@ export default function SettingsView({ health, theme, onTheme, onChanged }: Prop
   };
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto p-2">
-      <h2 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-dim">
-        Settings
-      </h2>
+    <div className="flex h-full flex-col gap-5 overflow-y-auto p-3 text-ink-dim select-none">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-line pb-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink">Settings</h2>
+      </div>
 
-      <section className="px-1">
-        <h3 className="mb-1 font-medium text-ink">Memory root</h3>
-        <p className="mb-2 text-ink-faint">
-          The folder holding your memories, one directory per project. Plain Markdown — back it up
-          by copying it.
+      {/* Theme Section */}
+      <section>
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <PaletteIcon className="h-4 w-4 text-accent" />
+          <h3 className="font-semibold text-xs text-ink">Appearance & Theme</h3>
+        </div>
+        <p className="text-[11px] text-ink-faint mb-3">
+          Select a developer theme tailored for long coding sessions and knowledge work.
+        </p>
+
+        <div className="grid grid-cols-1 gap-2">
+          {THEMES.map((item) => {
+            const isSelected = theme === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onTheme(item.id)}
+                className={`group flex items-center justify-between rounded-md border p-2 text-left transition-all ${
+                  isSelected
+                    ? "border-accent bg-selected/20 shadow-xs"
+                    : "border-line bg-raised/60 hover:border-ink-faint hover:bg-raised"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  {/* Theme Color Palette Preview Swatch */}
+                  <div className="flex items-center -space-x-1 rounded border border-line p-0.5 bg-shell shrink-0">
+                    <span
+                      className="h-4 w-4 rounded-full border border-black/20"
+                      style={{ backgroundColor: item.primaryBg }}
+                      title="Shell"
+                    />
+                    <span
+                      className="h-4 w-4 rounded-full border border-black/20"
+                      style={{ backgroundColor: item.editorBg }}
+                      title="Editor"
+                    />
+                    <span
+                      className="h-4 w-4 rounded-full border border-black/20"
+                      style={{ backgroundColor: item.accent }}
+                      title="Accent"
+                    />
+                    <span
+                      className="h-4 w-4 rounded-full border border-black/20"
+                      style={{ backgroundColor: item.tag }}
+                      title="Tag"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-medium text-ink">{item.name}</div>
+                    <div className="font-mono text-[10px] text-ink-faint capitalize">
+                      {item.category} mode
+                    </div>
+                  </div>
+                </div>
+
+                {isSelected && (
+                  <span className="flex items-center gap-1 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                    <CheckIcon className="h-3 w-3" />
+                    Active
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Memory Root Storage Section */}
+      <section className="border-t border-line pt-4">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <FolderIcon className="h-4 w-4 text-accent" />
+          <h3 className="font-semibold text-xs text-ink">Memory Storage Root</h3>
+        </div>
+        <p className="text-[11px] text-ink-faint mb-2.5">
+          The directory containing your Markdown memories organized by project. Fully portable and plain text.
         </p>
 
         <form
@@ -71,29 +145,29 @@ export default function SettingsView({ health, theme, onTheme, onChanged }: Prop
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
             aria-label="Memory root path"
-            className="w-full rounded border border-line bg-editor px-2 py-1 font-mono text-[11px] text-ink focus:border-accent focus:outline-none"
+            className="w-full rounded border border-line bg-editor px-2.5 py-1.5 font-mono text-[11px] text-ink focus:border-accent outline-none"
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={browse}
               disabled={busy}
-              className="rounded border border-line px-2 py-0.5 text-ink-dim hover:bg-hover hover:text-ink disabled:opacity-40"
+              className="rounded border border-line bg-raised px-2.5 py-1 text-xs text-ink hover:bg-hover transition-colors disabled:opacity-40"
             >
               Browse…
             </button>
             <button
               type="submit"
               disabled={busy || !draft.trim() || draft.trim() === settings?.root}
-              className="rounded bg-accent px-2 py-0.5 font-medium text-accent-ink disabled:opacity-40"
+              className="rounded bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:opacity-95 transition-opacity disabled:opacity-40"
             >
-              {busy ? "Moving…" : "Use this root"}
+              {busy ? "Applying…" : "Apply"}
             </button>
             {settings && (
               <button
                 type="button"
                 onClick={() => bridge.reveal(settings.root)}
-                className="rounded border border-line px-2 py-0.5 text-ink-dim hover:bg-hover hover:text-ink"
+                className="rounded border border-line px-2.5 py-1 text-xs text-ink-dim hover:bg-hover hover:text-ink transition-colors"
               >
                 Reveal
               </button>
@@ -105,55 +179,38 @@ export default function SettingsView({ health, theme, onTheme, onChanged }: Prop
           <button
             type="button"
             onClick={() => save(settings.defaultRoot!)}
-            className="mt-2 text-accent hover:underline"
+            className="mt-2 text-[11px] text-accent hover:underline"
           >
-            Back to the default location
+            Reset to default location
           </button>
         )}
 
-        {/* Changing the root changes which memories every agent sees, so the
-            outcome is stated rather than left to be inferred from the tree. */}
-        {status && <p className="mt-2 text-ink-dim">{status}</p>}
+        {status && <p className="mt-2 text-[11px] text-tag">{status}</p>}
       </section>
 
-      <section className="px-1">
-        <h3 className="mb-1 font-medium text-ink">Appearance</h3>
-        <div className="flex gap-2">
-          {(["dark", "light"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onTheme(value)}
-              aria-pressed={theme === value}
-              className={`rounded border px-2 py-0.5 capitalize ${
-                theme === value
-                  ? "border-accent bg-selected text-ink"
-                  : "border-line text-ink-dim hover:bg-hover hover:text-ink"
-              }`}
-            >
-              {value}
-            </button>
-          ))}
+      {/* Installation Diagnostics Card */}
+      <section className="border-t border-line pt-4">
+        <h3 className="font-semibold text-xs text-ink mb-2">System Diagnostics</h3>
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded border border-line bg-raised/50 p-2">
+            <span className="text-ink-faint block font-mono text-[10px]">Version</span>
+            <span className="font-semibold text-ink">{health?.version ?? "0.1.0"}</span>
+          </div>
+          <div className="rounded border border-line bg-raised/50 p-2">
+            <span className="text-ink-faint block font-mono text-[10px]">Mode</span>
+            <span className="font-semibold text-ink">{health?.portable ? "Portable" : "Installed"}</span>
+          </div>
+          <div className="rounded border border-line bg-raised/50 p-2">
+            <span className="text-ink-faint block font-mono text-[10px]">Memories</span>
+            <span className="font-semibold text-ink font-mono">{health?.memories ?? 0}</span>
+          </div>
+          <div className="rounded border border-line bg-raised/50 p-2">
+            <span className="text-ink-faint block font-mono text-[10px]">Index Size</span>
+            <span className="font-semibold text-ink font-mono">
+              {health ? `${Math.round(health.indexBytes / 1024)} KB` : "—"}
+            </span>
+          </div>
         </div>
-      </section>
-
-      <section className="border-t border-line px-1 pt-3 text-ink-dim">
-        <h3 className="mb-1 font-medium text-ink">This installation</h3>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-          <dt>version</dt>
-          <dd className="font-mono text-[11px]">{health?.version ?? "—"}</dd>
-          <dt>mode</dt>
-          <dd>{health?.portable ? "portable" : "installed"}</dd>
-          <dt>config</dt>
-          <dd className="selectable break-all font-mono text-[11px]">{health?.configPath ?? "—"}</dd>
-          <dt>index</dt>
-          <dd className="font-mono text-[11px]">
-            {health ? `${Math.round(health.indexBytes / 1024)} KB` : "—"}
-          </dd>
-        </dl>
-        <p className="mt-2 text-ink-faint">
-          The index is derived from the files. Deleting it costs one rebuild and nothing else.
-        </p>
       </section>
     </div>
   );

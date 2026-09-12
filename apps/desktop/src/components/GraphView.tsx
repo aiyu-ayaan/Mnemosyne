@@ -8,6 +8,7 @@ import {
   PlayIcon,
   RefreshIcon,
   ResetIcon,
+  SettingsIcon,
   ZoomInIcon,
   ZoomOutIcon,
 } from "./Icons";
@@ -76,6 +77,13 @@ export default function GraphView({
   const [paused, setPaused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [physics, setPhysics] = useState({
+    repulsion: 450,
+    springLength: 80,
+    centerGravity: 0.005,
+    showLabels: true,
+  });
 
   // Graph data state
   const [rawGraph, setRawGraph] = useState<GraphData>({ nodes: [], edges: [] });
@@ -310,11 +318,11 @@ export default function GraphView({
 
       // Simulation Physics Step
       if (!paused && nodes.length > 0) {
-        const repulsion = 450;
-        const springLength = 80;
+        const repulsion = physics.repulsion;
+        const springLength = physics.springLength;
         const springK = 0.04;
         const damping = 0.88;
-        const centerGravity = 0.005;
+        const centerGravity = physics.centerGravity;
 
         // Repulsion (Coulomb)
         for (let i = 0; i < nodes.length; i++) {
@@ -475,11 +483,12 @@ export default function GraphView({
 
         // Labels
         const showLabel =
-          isSelected ||
-          isHovered ||
-          isConnected ||
-          zoom > 1.1 ||
-          (zoom > 0.7 && n.degree > 1);
+          physics.showLabels &&
+          (isSelected ||
+            isHovered ||
+            isConnected ||
+            zoom > 1.1 ||
+            (zoom > 0.7 && n.degree > 1));
 
         if (showLabel) {
           ctx.font = `${Math.max(10, 11 / zoom)}px "Cascadia Code", ui-monospace, sans-serif`;
@@ -802,8 +811,119 @@ export default function GraphView({
           >
             <RefreshIcon className="h-3.5 w-3.5" />
           </button>
+          <button
+            type="button"
+            title="Graph Physics Settings"
+            onClick={() => setShowSettings((s) => !s)}
+            className={`rounded p-1 transition-colors ${
+              showSettings ? "bg-accent text-accent-ink" : "text-ink-faint hover:bg-hover hover:text-ink"
+            }`}
+          >
+            <SettingsIcon className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
+
+      {/* Physics Settings HUD Drawer */}
+      {showSettings && (
+        <div className="absolute left-3 top-16 z-20 w-64 rounded-md border border-line bg-raised/95 p-3 shadow-xl backdrop-blur-md text-ink-dim">
+          <div className="flex items-center justify-between border-b border-line pb-1.5 mb-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink">
+              Graph Forces
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowSettings(false)}
+              className="text-xs text-ink-faint hover:text-ink"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2.5 text-xs">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Repulsion Force</span>
+                <span className="font-mono text-[11px] text-ink">{physics.repulsion}</span>
+              </div>
+              <input
+                type="range"
+                min="150"
+                max="900"
+                step="25"
+                value={physics.repulsion}
+                onChange={(e) =>
+                  setPhysics((p) => ({ ...p, repulsion: Number(e.target.value) }))
+                }
+                className="w-full accent-accent"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Link Distance</span>
+                <span className="font-mono text-[11px] text-ink">{physics.springLength}px</span>
+              </div>
+              <input
+                type="range"
+                min="40"
+                max="220"
+                step="10"
+                value={physics.springLength}
+                onChange={(e) =>
+                  setPhysics((p) => ({ ...p, springLength: Number(e.target.value) }))
+                }
+                className="w-full accent-accent"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Center Gravity</span>
+                <span className="font-mono text-[11px] text-ink">{physics.centerGravity}</span>
+              </div>
+              <input
+                type="range"
+                min="0.001"
+                max="0.02"
+                step="0.001"
+                value={physics.centerGravity}
+                onChange={(e) =>
+                  setPhysics((p) => ({ ...p, centerGravity: Number(e.target.value) }))
+                }
+                className="w-full accent-accent"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-line/60">
+              <span>Show Labels</span>
+              <input
+                type="checkbox"
+                checked={physics.showLabels}
+                onChange={(e) =>
+                  setPhysics((p) => ({ ...p, showLabels: e.target.checked }))
+                }
+                className="accent-accent"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setPhysics({
+                  repulsion: 450,
+                  springLength: 80,
+                  centerGravity: 0.005,
+                  showLabels: true,
+                })
+              }
+              className="mt-1 w-full rounded border border-line py-1 text-[11px] text-ink-dim hover:bg-hover hover:text-ink transition-colors"
+            >
+              Reset Forces to Default
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Status Badges Overlay (Top Right) */}
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-2">

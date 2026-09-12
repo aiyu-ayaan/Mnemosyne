@@ -15,7 +15,7 @@ import StatusBar from "./components/StatusBar";
 import Tabs from "./components/Tabs";
 import { api, bridge } from "./lib/bridge";
 import { draftTab, tabFromMemory, tabKey, type OpenTab } from "./lib/tabs";
-import type { ChangeEvent, ChannelInfo, Hit, Memory, Meta } from "./lib/types";
+import type { ChangeEvent, ChannelInfo, Hit, Memory, Meta, ThemeId } from "./lib/types";
 import { useLibrary } from "./lib/useLibrary";
 
 type LogEntry = ChangeEvent | { kind: "error"; message: string; at: string };
@@ -26,8 +26,8 @@ const logLimit = 200;
 export default function App() {
   const library = useLibrary();
 
-  const [theme, setTheme] = useState<"dark" | "light">(
-    () => (localStorage.getItem("mnemosyne.theme") as "dark" | "light" | null) ?? "dark",
+  const [theme, setTheme] = useState<ThemeId>(
+    () => (localStorage.getItem("mnemosyne.theme") as ThemeId | null) ?? "dark",
   );
   const [view, setView] = useState<View>("explorer");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -77,8 +77,20 @@ export default function App() {
   // --- theme ---
 
   useEffect(() => {
-    document.documentElement.classList.toggle("light", theme === "light");
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    const root = document.documentElement;
+    root.classList.remove(
+      "light",
+      "theme-midnight",
+      "theme-tokyo",
+      "theme-nord",
+      "theme-catppuccin",
+      "theme-monokai",
+    );
+    if (theme === "light") {
+      root.classList.add("light");
+    } else if (theme !== "dark") {
+      root.classList.add(`theme-${theme}`);
+    }
     localStorage.setItem("mnemosyne.theme", theme);
   }, [theme]);
 
@@ -486,6 +498,10 @@ export default function App() {
                 }
                 onSave={saveTab}
                 onDelete={deleteActive}
+                onOpenWikilink={(targetSlug) => {
+                  const project = activeTab.project;
+                  openMemory(project, targetSlug);
+                }}
               />
             ) : (
               <Welcome
@@ -522,6 +538,8 @@ export default function App() {
         connected={channel !== null && !fatal}
         activeProject={activeTab?.project ?? null}
         dirtyCount={dirtyCount}
+        theme={theme}
+        onTheme={setTheme}
         onTogglePanel={() => setPanelOpen((v) => !v)}
       />
 

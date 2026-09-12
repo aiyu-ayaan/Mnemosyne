@@ -1,46 +1,143 @@
 @import "tailwindcss";
 
-/* The VS Code Dark Modern palette, because the audience already has this
-   layout in muscle memory and a near-miss on the colours is more jarring than
-   an honest copy. Dark is the default; the light values are an override on a
-   root class rather than a second theme file. */
+/* Design System Themes - ui-ux-pro-max compliant
+   Six curated themes for developers and knowledge workers.
+   Default: VS Code Dark Modern */
 @theme {
   --color-shell: #181818;
   --color-editor: #1f1f1f;
-  --color-raised: #202020;
-  --color-line: #2b2b2b;
-  --color-ink: #cccccc;
+  --color-raised: #252526;
+  --color-line: #2d2d2d;
+  --color-ink: #e0e0e0;
   --color-ink-dim: #9d9d9d;
   --color-ink-faint: #6e7681;
   --color-accent: #0078d4;
   --color-accent-ink: #ffffff;
   --color-hover: #2a2d2e;
   --color-selected: #04395e;
-  --color-warn: #cca700;
+  --color-warn: #e3b341;
   --color-danger: #f14c4c;
   --color-tag: #4ec9b0;
+  --color-code: #ce9178;
 
   --font-mono:
     "Cascadia Code", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Ubuntu, "Helvetica Neue", sans-serif;
 }
 
-html.light {
-  --color-shell: #f8f8f8;
-  --color-editor: #ffffff;
-  --color-raised: #f3f3f3;
-  --color-line: #e5e5e5;
-  --color-ink: #3b3b3b;
-  --color-ink-dim: #616161;
-  --color-ink-faint: #8b8b8b;
-  --color-accent: #005fb8;
+/* 1. Midnight / Obsidian OLED Deep Black */
+html.theme-midnight {
+  --color-shell: #0a0c10;
+  --color-editor: #0f1219;
+  --color-raised: #161b26;
+  --color-line: #222938;
+  --color-ink: #f1f5f9;
+  --color-ink-dim: #94a3b8;
+  --color-ink-faint: #64748b;
+  --color-accent: #8b5cf6;
   --color-accent-ink: #ffffff;
-  --color-hover: #e8e8e8;
-  --color-selected: #cce4f7;
-  --color-warn: #855f00;
-  --color-danger: #cd3131;
-  --color-tag: #0f766e;
+  --color-hover: #1c2333;
+  --color-selected: #3b1d82;
+  --color-warn: #f59e0b;
+  --color-danger: #ef4444;
+  --color-tag: #a78bfa;
+  --color-code: #f472b6;
+}
+
+/* 2. Tokyo Night */
+html.theme-tokyo {
+  --color-shell: #16161e;
+  --color-editor: #1a1b26;
+  --color-raised: #24283b;
+  --color-line: #2f354f;
+  --color-ink: #c0caf5;
+  --color-ink-dim: #9aa5ce;
+  --color-ink-faint: #565f89;
+  --color-accent: #7aa2f7;
+  --color-accent-ink: #15161e;
+  --color-hover: #292e42;
+  --color-selected: #283457;
+  --color-warn: #e0af68;
+  --color-danger: #f7768e;
+  --color-tag: #7dcfff;
+  --color-code: #ff9e64;
+}
+
+/* 3. Nord (Arctic Slate) */
+html.theme-nord {
+  --color-shell: #242933;
+  --color-editor: #2e3440;
+  --color-raised: #3b4252;
+  --color-line: #4c566a;
+  --color-ink: #eceff4;
+  --color-ink-dim: #d8dee9;
+  --color-ink-faint: #7b88a1;
+  --color-accent: #88c0d0;
+  --color-accent-ink: #2e3440;
+  --color-hover: #3b4252;
+  --color-selected: #434c5e;
+  --color-warn: #ebcb8b;
+  --color-danger: #bf616a;
+  --color-tag: #8fbcbb;
+  --color-code: #d08770;
+}
+
+/* 4. Catppuccin Mocha */
+html.theme-catppuccin {
+  --color-shell: #11111b;
+  --color-editor: #1e1e2e;
+  --color-raised: #252538;
+  --color-line: #363a4f;
+  --color-ink: #cdd6f4;
+  --color-ink-dim: #a6adc8;
+  --color-ink-faint: #6c7086;
+  --color-accent: #cba6f7;
+  --color-accent-ink: #11111b;
+  --color-hover: #313244;
+  --color-selected: #45475a;
+  --color-warn: #f9e2af;
+  --color-danger: #f38ba8;
+  --color-tag: #94e2d5;
+  --color-code: #fab387;
+}
+
+/* 5. Monokai Pro */
+html.theme-monokai {
+  --color-shell: #1e1f1c;
+  --color-editor: #272822;
+  --color-raised: #32332c;
+  --color-line: #3e3d32;
+  --color-ink: #f8f8f2;
+  --color-ink-dim: #cfcfc2;
+  --color-ink-faint: #75715e;
+  --color-accent: #a6e22e;
+  --color-accent-ink: #272822;
+  --color-hover: #3e3d32;
+  --color-selected: #49483e;
+  --color-warn: #fd971f;
+  --color-danger: #f92672;
+  --color-tag: #66d9ef;
+  --color-code: #e6db74;
+}
+
+/* 6. Clean Paper Light */
+html.light {
+  --color-shell: #f8fafc;
+  --color-editor: #ffffff;
+  --color-raised: #f1f5f9;
+  --color-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-ink-dim: #475569;
+  --color-ink-faint: #94a3b8;
+  --color-accent: #0284c7;
+  --color-accent-ink: #ffffff;
+  --color-hover: #f1f5f9;
+  --color-selected: #e0f2fe;
+  --color-warn: #d97706;
+  --color-danger: #dc2626;
+  --color-tag: #0d9488;
+  --color-code: #ea580c;
 }
 
 html,
@@ -55,42 +152,140 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 13px;
-  /* A desktop shell that rubber-bands or selects its own chrome on a drag reads
-     as a web page in a frame. */
   overscroll-behavior: none;
   user-select: none;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
-/* Text the user is actually reading or editing is selectable again. */
 input,
 textarea,
 .selectable {
   user-select: text;
 }
 
-/* Thin, unobtrusive scrollbars, matching the editor rather than the OS. */
+/* Scrollbars */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 *::-webkit-scrollbar-thumb {
   background: var(--color-line);
-  border-radius: 5px;
+  border-radius: 4px;
 }
 
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Keyboard focus must stay visible — it is the only way to use the tree and the
-   tab bar without a mouse. */
 :focus-visible {
-  outline: 1px solid var(--color-accent);
+  outline: 1.5px solid var(--color-accent);
   outline-offset: -1px;
+}
+
+/* Markdown rendered styling */
+.markdown-body {
+  line-height: 1.65;
+  color: var(--color-ink);
+}
+
+.markdown-body h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+  padding-bottom: 0.35rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+  padding-bottom: 0.25rem;
+}
+
+.markdown-body h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.markdown-body p {
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  background-color: var(--color-raised);
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: var(--color-code);
+  border: 1px solid var(--color-line);
+}
+
+.markdown-body pre {
+  background-color: var(--color-shell);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body pre code {
+  background-color: transparent;
+  padding: 0;
+  border: none;
+  font-size: 0.9em;
+  color: var(--color-ink);
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 0.75rem;
+  color: var(--color-ink-dim);
+  margin-bottom: 0.75rem;
+  font-style: italic;
+}
+
+.markdown-body .wikilink {
+  color: var(--color-accent);
+  background: var(--color-selected);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid var(--color-accent);
+}
+
+.markdown-body .wikilink:hover {
+  text-decoration: underline;
+  opacity: 0.9;
 }
