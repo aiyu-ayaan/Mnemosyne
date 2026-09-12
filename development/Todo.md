@@ -35,15 +35,14 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Tool-level tests driving a real server over an in-memory transport
 - [x] **1.5 CLI + config** — `serve`, `doctor`, `root`, `version`; root
       resolution (flag → env → config file → OS default dir)
-- [ ] **1.6 Portable mode + install** — see [`devdocs/deployment.md`](devdocs/deployment.md)
-  - [ ] Portable mode: `mnemosyne.portable` marker or `--portable`, everything
+- [x] **1.6 Portable mode + install** — see [`devdocs/deployment.md`](devdocs/deployment.md)
+  - [x] Portable mode: `mnemosyne.portable` marker or `--portable`, everything
         beside the binary, nothing written outside its own folder
-  - [ ] `mnemosyne install` / `uninstall`, per-user by default, no admin needed
-  - [ ] PATH registration: `HKCU\Environment` on Windows, `~/.local/bin` symlink
-        on Unix; `--machine` for the system PATH, the only path needing admin
-  - [ ] Logon autostart: Scheduled Task, LaunchAgent, or `systemd --user`
-- [ ] **1.7 Docs + release** — README, install and MCP wiring instructions for
-      Claude Code and Codex, `devdocs` refresh
+  - [x] `mnemosyne install` / `uninstall`, per-user by default, no admin needed
+  - [x] PATH registration: `HKCU\Environment` on Windows, `~/.local/bin` on
+        Unix; `--machine` for the system PATH, the only path needing admin
+  - Logon autostart moved to Phase 2, where the daemon it would start exists
+- [x] **1.7 Docs** — README with install, portable, MCP wiring, and the tool table
 
 **MVP done when:** `claude mcp add mnemosyne -- mnemosyne serve` gives an agent
 working memory that survives restarts, and the files are legible in any editor.
@@ -60,7 +59,8 @@ to talk to it is a process that burns memory and does nothing.
 - [ ] **2.2 Local channel** — named pipe on Windows, unix socket elsewhere; no
       TCP port, OS permissions as the boundary, token file as defence in depth
 - [ ] **2.3 `mnemosyne daemon`** — long-running, serves the channel, per-user
-- [ ] **2.4 `service status|start|stop`** — manage the logon task from the CLI
+- [ ] **2.4 Logon autostart** — Scheduled Task, LaunchAgent, or `systemd --user`,
+      plus `service status|start|stop` to manage it from the CLI
 - [ ] **2.5 Change events** — push index and file changes to connected clients
 - [ ] **2.6 File watcher** — external edits (an agent, an editor, git) reindex live
 - [ ] **2.7 Electron + React + TS + Vite + Tailwind shell**

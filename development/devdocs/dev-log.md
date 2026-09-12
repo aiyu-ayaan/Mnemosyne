@@ -3,6 +3,46 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 5 — Portable mode, install, and PATH
+
+`internal/install`, a reworked `internal/config`, and the README. MVP complete.
+
+- `config.Detect` returns a `Locations` for the run: installed (user config dir)
+  or portable (beside the binary). Root resolution is unchanged — flag, env,
+  config file, default — only the default and the settings path move.
+- `mnemosyne install` copies the binary to a per-user directory and adds it to
+  PATH; `uninstall` reverses both. `--machine` is the only path needing admin.
+- `doctor` now reports the mode and the binary directory too.
+
+**Verified:** `go vet ./...` clean, `go test ./...` passing — 14 new config and
+PATH tests. A portable copy was then built and run for real: it reported
+portable mode, wrote its config, index, and memories inside its own folder and
+nothing outside it, and refused `install` with the reason.
+
+`install` was deliberately **not** run against this machine's registry. Editing
+the user's PATH is theirs to trigger, not something to do while testing.
+
+**Decisions taken here**
+
+- *Autostart moved to Phase 2, with the daemon.* An autostart entry that
+  launches a daemon nothing can talk to is a process that burns memory to do
+  nothing. It waits for the client that gives it a purpose.
+- *Admin does not mean a system service.* Reasoned through in
+  [`deployment.md`](deployment.md): memories live in a user profile, so a
+  boot-time SYSTEM service could not reach them without an impersonation layer.
+  One per-user process model instead of two.
+- *Shell profiles are never edited on Unix.* The binary is installed into a
+  directory already on PATH; if it turns out not to be, the user is told the one
+  line to add. Rewriting someone's `.zshrc` is fragile and presumptuous.
+- *`addEntry` and `removeEntry` live in the Windows file.* A vet diagnostic
+  showed them dead on Unix, where PATH is never rewritten. Code belongs beside
+  the platform that uses it.
+- *The install copy goes through a temp file and a rename, moving any existing
+  binary aside first.* Windows will not overwrite or delete a running
+  executable, so this is what lets an upgrade replace a binary that is in use.
+- *`uninstall` never deletes memories.* Removing a program should not destroy
+  the user's data, and there is no backup yet to undo it with.
+
 ## Stage 4 — CLI and configuration
 
 `internal/config` and `cmd/mnemosyne`. The binary now runs.

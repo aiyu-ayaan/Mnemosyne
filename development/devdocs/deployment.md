@@ -5,9 +5,9 @@ almost entirely about *where the binary sits* — not about how it works.
 
 | Mode              | Binary location            | PATH        | Autostart | Needs admin |
 | ----------------- | -------------------------- | ----------- | --------- | ----------- |
-| **Portable**      | anywhere, e.g. a USB stick | never       | never     | no          |
-| **User install**  | per-user bin directory     | user PATH   | at logon  | no          |
-| **Machine install** | system bin directory     | system PATH | at logon  | yes         |
+| **Portable**      | anywhere, e.g. a USB stick | never       | never             | no          |
+| **User install**  | per-user bin directory     | user PATH   | at logon (Phase 2) | no          |
+| **Machine install** | system bin directory     | system PATH | at logon (Phase 2) | yes         |
 
 User install is the default. Machine install exists only to put the binary on
 the PATH for every account on a shared machine.
@@ -76,14 +76,14 @@ client configured with the bare command `mnemosyne` finds it.
 | -------------------- | ------------------------------------------------------------ |
 | Windows, user        | Appends to `HKCU\Environment` `Path`, broadcasts `WM_SETTINGCHANGE` |
 | Windows, machine     | Appends to the machine `Path` under `HKLM`                     |
-| macOS / Linux, user  | Symlinks into `~/.local/bin`, which is on PATH by default       |
-| macOS / Linux, system| Symlinks into `/usr/local/bin`                                  |
+| macOS / Linux, user  | Copies into `~/.local/bin`, which is on PATH by default         |
+| macOS / Linux, system| Copies into `/usr/local/bin`                                    |
 
 Rules:
 
 - **Never edit shell profiles.** `.bashrc`, `.zshrc`, and friends belong to the
-  user. A symlink into a directory already on PATH achieves the same thing and
-  is removable without parsing someone's dotfiles.
+  user. Installing into a directory that is already on PATH achieves the same
+  thing without parsing and rewriting someone's dotfiles.
 - **Appending to PATH is idempotent.** Install twice, appear once.
 - **Uninstall removes exactly what install added**, and nothing it did not.
 - If `~/.local/bin` turns out not to be on PATH, print the one line to add
@@ -142,18 +142,24 @@ to protect an invariant the storage design already holds.
 ## Commands
 
 ```
-mnemosyne install [--machine] [--no-path] [--no-autostart]
-mnemosyne uninstall [--purge]
-mnemosyne daemon                    run the local channel in the foreground
-mnemosyne service status|start|stop
+mnemosyne install [--machine] [--no-path]      shipped
+mnemosyne uninstall [--machine]                shipped
+mnemosyne daemon                               Phase 2
+mnemosyne service status|start|stop            Phase 2
 ```
 
-- `install` without flags does the per-user install: copy the binary, add to the
-  user PATH, register the logon task. It never requires admin.
+The daemon, the logon autostart, and the channel land together in Phase 2. An
+autostart entry that launches a daemon nothing can talk to is a process that
+burns memory to do nothing, so it waits for the client that gives it a purpose.
+
+- `install` without flags does the per-user install: copy the binary and add its
+  directory to the user PATH. It never requires admin.
 - `--machine` writes to the system location and the system PATH, and is the only
-  path that needs elevation. It still registers a per-user logon task.
-- `uninstall` reverses it. `--purge` additionally deletes the memory root, and
-  asks first, because that is the user's data and nothing else in the product
-  destroys it.
+  path that needs elevation. When autostart lands it will still be per-user.
+- The binary is copied through a temp file and a rename, and an existing copy is
+  moved aside first, so an upgrade can replace a binary that is currently
+  running and an interrupted install cannot leave a truncated executable on PATH.
+- `uninstall` reverses it, and never touches the memory root. Removing a program
+  should not delete the user's data, and there is no backup yet to undo it with.
 - `install` prints the exact MCP wiring command afterwards, since being on PATH
   is only useful if the user knows what to do with it.
