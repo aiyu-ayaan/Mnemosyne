@@ -45,8 +45,10 @@ export function PlugIcon({ className = base }: IconProps) {
 export function SettingsIcon({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2.5v3M12 18.5v3M4.2 7l2.6 1.5M17.2 15.5l2.6 1.5M4.2 17l2.6-1.5M17.2 8.5l2.6-1.5" />
+      {/* One closed 8-tooth cog outline, not a hub with loose dashes around it:
+          the dashes read as a sun at 24px and as noise at 14px. */}
+      <path d="M10.32 2.45L13.68 2.45L13.79 5.54L15.3 6.17L17.56 4.05L19.95 6.44L17.83 8.7L18.46 10.21L21.55 10.32L21.55 13.68L18.46 13.79L17.83 15.3L19.95 17.56L17.56 19.95L15.3 17.83L13.79 18.46L13.68 21.55L10.32 21.55L10.21 18.46L8.7 17.83L6.44 19.95L4.05 17.56L6.17 15.3L5.54 13.79L2.45 13.68L2.45 10.32L5.54 10.21L6.17 8.7L4.05 6.44L6.44 4.05L8.7 6.17L10.21 5.54Z" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3.1" />
     </svg>
   );
 }

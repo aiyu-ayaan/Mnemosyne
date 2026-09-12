@@ -8,14 +8,23 @@ import { GraphIcon, PaletteIcon, PlugIcon } from "./components/Icons";
 import McpView from "./components/McpView";
 import Panel, { type PanelTab } from "./components/Panel";
 import Prompt, { type Ask } from "./components/Prompt";
-import QuickOpen from "./components/QuickOpen";
+import QuickOpen, { type Command } from "./components/QuickOpen";
 import SearchView, { type SearchMode } from "./components/SearchView";
 import SettingsView from "./components/SettingsView";
 import StatusBar from "./components/StatusBar";
-import Tabs, { type MainMode } from "./components/Tabs";
+import Tabs from "./components/Tabs";
 import ThemeView from "./components/ThemeView";
 import { api, bridge } from "./lib/bridge";
-import { draftTab, tabFromMemory, tabKey, type OpenTab } from "./lib/tabs";
+import {
+  asMemory,
+  draftTab,
+  tabFromMemory,
+  tabKey,
+  viewKey,
+  viewTab,
+  type OpenTab,
+  type ViewId,
+} from "./lib/tabs";
 import type { ChangeEvent, ChannelInfo, Hit, Memory, Meta, ThemeId } from "./lib/types";
 import { useLibrary } from "./lib/useLibrary";
 
@@ -34,7 +43,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>("search");
-  const [mainMode, setMainMode] = useState<MainMode>("editor");
 
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -53,7 +61,8 @@ export default function App() {
   const [semanticAvailable, setSemanticAvailable] = useState(false);
 
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [quickOpen, setQuickOpen] = useState(false);
+  // null when closed; otherwise which mode the palette opened in.
+  const [palette, setPalette] = useState<"memories" | "commands" | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
@@ -61,6 +70,9 @@ export default function App() {
   const [backlinks, setBacklinks] = useState<Meta[]>([]);
 
   const activeTab = tabs.find((tab) => tab.key === activeKey) ?? null;
+  // Most of the app only means something for a memory. Narrowing once here
+  // beats a `kind === "memory"` check at every use.
+  const activeMemory = asMemory(activeTab);
 
   const note = useCallback((entry: LogEntry) => {
     setLog((prev) => [...prev, entry].slice(-logLimit));
@@ -126,7 +138,6 @@ export default function App() {
       // refetched over the top of them.
       if (existing) {
         setActiveKey(key);
-        setMainMode("editor");
         return;
       }
       try {
@@ -136,7 +147,6 @@ export default function App() {
         );
         setTabs((prev) => [...prev, tabFromMemory(memory)]);
         setActiveKey(key);
-        setMainMode("editor");
         setSaveError(null);
       } catch (err) {
         reportError(err);
@@ -161,9 +171,10 @@ export default function App() {
         setAsk(null);
       };
 
-      if (tab?.dirty) {
+      const memory = asMemory(tab);
+      if (memory?.dirty) {
         setAsk({
-          title: `Discard changes to ${tab.title || tab.slug || "this memory"}?`,
+          title: `Discard changes to ${memory.title || memory.slug || "this memory"}?`,
           message: "It has unsaved edits. They cannot be recovered.",
           confirmLabel: "Discard",
           danger: true,
@@ -177,28 +188,29 @@ export default function App() {
   );
 
   const saveTab = useCallback(async () => {
-    if (!activeTab || !activeTab.dirty || activeTab.title.trim() === "") return;
+    if (!activeMemory || !activeMemory.dirty || activeMemory.title.trim() === "") return;
+    const current = activeMemory;
 
     setSaving(true);
     setSaveError(null);
     try {
-      const base = `/v1/projects/${encodeURIComponent(activeTab.project)}/memories`;
+      const base = `/v1/projects/${encodeURIComponent(current.project)}/memories`;
       const body = {
-        title: activeTab.title,
-        body: activeTab.body,
-        tags: activeTab.tags,
-        links: activeTab.links,
+        title: current.title,
+        body: current.body,
+        tags: current.tags,
+        links: current.links,
       };
 
       // POST creates and lets the backend derive the slug from the title; PUT
       // updates in place. The renderer never invents a slug.
       const saved =
-        activeTab.slug === null
+        current.slug === null
           ? await api<Memory>("POST", base, body)
-          : await api<Memory>("PUT", `${base}/${encodeURIComponent(activeTab.slug)}`, body);
+          : await api<Memory>("PUT", `${base}/${encodeURIComponent(current.slug)}`, body);
 
       const fresh = tabFromMemory(saved);
-      setTabs((prev) => prev.map((tab) => (tab.key === activeTab.key ? fresh : tab)));
+      setTabs((prev) => prev.map((tab) => (tab.key === current.key ? fresh : tab)));
       setActiveKey(fresh.key);
       library.reload();
     } catch (err) {
@@ -206,11 +218,11 @@ export default function App() {
     } finally {
       setSaving(false);
     }
-  }, [activeTab, library, reportError]);
+  }, [activeMemory, library, reportError]);
 
   const deleteActive = useCallback(() => {
-    if (!activeTab?.slug) return;
-    const { project, slug, title, key } = activeTab;
+    if (!activeMemory?.slug) return;
+    const { project, slug, title, key } = activeMemory;
 
     setAsk({
       title: `Delete ${title || slug}?`,
@@ -235,7 +247,7 @@ export default function App() {
         }
       },
     });
-  }, [activeTab, library, reportError]);
+  }, [activeMemory, library, reportError]);
 
   const newMemory = useCallback((project: string) => {
     const tab = draftTab(project);
@@ -278,7 +290,7 @@ export default function App() {
           try {
             await api<void>("DELETE", `/v1/projects/${encodeURIComponent(project)}`);
             setTabs((prev) => {
-              const next = prev.filter((tab) => tab.project !== project);
+              const next = prev.filter((tab) => tab.kind !== "memory" || tab.project !== project);
               setActiveKey(next[next.length - 1]?.key ?? null);
               return next;
             });
@@ -321,12 +333,12 @@ export default function App() {
   // --- backlinks for the open memory ---
 
   useEffect(() => {
-    if (!activeTab?.slug) {
+    if (!activeMemory?.slug) {
       setBacklinks([]);
       return;
     }
     let cancelled = false;
-    const { project, slug } = activeTab;
+    const { project, slug } = activeMemory;
 
     api<{ backlinks: Meta[] }>(
       "GET",
@@ -344,7 +356,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab?.project, activeTab?.slug, activeTab?.updated]);
+  }, [activeMemory?.project, activeMemory?.slug, activeMemory?.updated]);
 
   // --- keyboard ---
 
@@ -354,9 +366,9 @@ export default function App() {
       if (!mod) return;
 
       const key = e.key.toLowerCase();
-      if (key === "p" && !e.shiftKey) {
+      if (key === "p") {
         e.preventDefault();
-        setQuickOpen(true);
+        setPalette(e.shiftKey ? "commands" : "memories");
       } else if (key === "f" && e.shiftKey) {
         e.preventDefault();
         setView("search");
@@ -390,60 +402,68 @@ export default function App() {
     () => Object.values(library.memories).flat(),
     [library.memories],
   );
-  const dirtyCount = tabs.filter((tab) => tab.dirty).length;
+  const dirtyCount = tabs.filter((tab) => tab.kind === "memory" && tab.dirty).length;
+
+  // Open the tab for a view, or focus it if it is already open. This is the
+  // whole of what used to be a five-branch mainMode state machine: a view is
+  // just a tab, so "show me settings" is the same action as "show me a memory".
+  const openView = useCallback((view: ViewId) => {
+    const key = viewKey(view);
+    setTabs((prev) => (prev.some((tab) => tab.key === key) ? prev : [...prev, viewTab(view)]));
+    setActiveKey(key);
+  }, []);
+
+  // The palette's command list. Everything here is reachable another way too —
+  // the palette exists so none of it has to be found first.
+  const commands: Command[] = useMemo(() => {
+    const project = activeMemory?.project ?? library.projects[0]?.slug ?? null;
+    return [
+      { id: "memory.new", group: "Memory", label: "New Memory", disabled: project === null,
+        run: () => project && newMemory(project) },
+      { id: "memory.save", group: "Memory", label: "Save", hint: "Ctrl+S",
+        disabled: !activeMemory?.dirty, run: saveTab },
+      { id: "memory.delete", group: "Memory", label: "Delete Memory",
+        disabled: !activeMemory?.slug, run: deleteActive },
+      { id: "memory.close", group: "Memory", label: "Close Tab", hint: "Ctrl+W",
+        disabled: activeKey === null, run: () => activeKey && closeTab(activeKey) },
+      { id: "project.new", group: "Project", label: "New Project", run: newProject },
+      { id: "view.graph", group: "View", label: "Knowledge Graph", run: () => openView("graph") },
+      { id: "view.mcp", group: "View", label: "MCP Clients", run: () => openView("mcp") },
+      { id: "view.theme", group: "View", label: "Theme Studio", run: () => openView("theme") },
+      { id: "view.settings", group: "View", label: "Settings", run: () => openView("settings") },
+      { id: "view.explorer", group: "View", label: "Show Explorer", hint: "Ctrl+Shift+E",
+        run: () => { setView("explorer"); setSidebarOpen(true); } },
+      { id: "view.search", group: "View", label: "Show Search", hint: "Ctrl+Shift+F",
+        run: () => { setView("search"); setSidebarOpen(true); } },
+      { id: "view.sidebar", group: "View", label: "Toggle Sidebar", hint: "Ctrl+B",
+        run: () => setSidebarOpen((v) => !v) },
+      { id: "view.panel", group: "View", label: "Toggle Panel", hint: "Ctrl+J",
+        run: () => setPanelOpen((v) => !v) },
+    ];
+  }, [activeMemory, activeKey, library.projects, newMemory, newProject, saveTab, deleteActive, closeTab, openView]);
 
   const onActivity = (next: View) => {
-    if (next === "mcp") {
-      setMainMode((current) => (current === "mcp" ? "editor" : "mcp"));
-      return;
-    }
-    if (next === "theme") {
-      setMainMode((current) => (current === "theme" ? "editor" : "theme"));
-      return;
-    }
-    if (next === "settings") {
-      setMainMode((current) => (current === "settings" ? "editor" : "settings"));
+    if (next === "explorer" || next === "search") {
+      // Clicking the active navigator collapses it, as in VS Code.
+      if (view === next && sidebarOpen) {
+        setSidebarOpen(false);
+        return;
+      }
+      setView(next);
+      setSidebarOpen(true);
       return;
     }
     if (next === "graph") {
       setView("graph");
       setSidebarOpen(true);
-      setMainMode("graph");
-      return;
     }
-    if (next === "explorer") {
-      if (view === "explorer" && sidebarOpen && mainMode === "editor") {
-        setSidebarOpen(false);
-      } else {
-        setView("explorer");
-        setSidebarOpen(true);
-        if (mainMode !== "editor" && mainMode !== "graph") {
-          setMainMode("editor");
-        }
-      }
-      return;
-    }
-    if (next === "search") {
-      if (view === "search" && sidebarOpen) {
-        setSidebarOpen(false);
-      } else {
-        setView("search");
-        setSidebarOpen(true);
-      }
-      return;
-    }
+    openView(next);
   };
 
+  // The activity bar highlights the navigator on the left, except that an open
+  // view tab is the more specific answer to "where am I".
   const activeActivityView: View =
-    mainMode === "mcp"
-      ? "mcp"
-      : mainMode === "theme"
-        ? "theme"
-        : mainMode === "settings"
-          ? "settings"
-          : mainMode === "graph"
-            ? "graph"
-            : view;
+    activeTab?.kind === "view" && activeTab.view !== "graph" ? activeTab.view : view;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -463,10 +483,7 @@ export default function App() {
                 library={library}
                 activeKey={activeKey}
                 tagFilter={tagFilter}
-                onOpen={(meta) => {
-                  openMemory(meta.project, meta.slug);
-                  setMainMode("editor");
-                }}
+                onOpen={(meta) => openMemory(meta.project, meta.slug)}
                 onTagFilter={setTagFilter}
                 onNewMemory={newMemory}
                 onNewProject={newProject}
@@ -488,57 +505,20 @@ export default function App() {
             {view === "graph" && (
               <GraphSidebar
                 projects={library.projects}
-                activeProject={activeTab?.project ?? null}
-                onOpenMemory={(project, slug) => {
-                  openMemory(project, slug);
-                  setMainMode("editor");
-                }}
+                activeProject={activeMemory?.project ?? null}
+                onOpenMemory={openMemory}
               />
             )}
           </aside>
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <Tabs
-            tabs={tabs}
-            activeKey={activeKey}
-            onSelect={(key) => {
-              setActiveKey(key);
-              setMainMode("editor");
-            }}
-            onClose={closeTab}
-            mainMode={mainMode}
-            onCloseSpecial={() => setMainMode("editor")}
-            onSelectMode={(mode) => setMainMode(mode)}
-          />
+          <Tabs tabs={tabs} activeKey={activeKey} onSelect={setActiveKey} onClose={closeTab} />
 
           <div className="min-h-0 flex-1 overflow-hidden">
-            {mainMode === "graph" ? (
-              <GraphView
-                projects={library.projects}
-                activeProject={activeTab?.project ?? null}
-                onOpenMemory={(project, slug) => {
-                  openMemory(project, slug);
-                  setMainMode("editor");
-                }}
-              />
-            ) : mainMode === "mcp" ? (
-              <McpView
-                health={library.health}
-                endpoint={channel?.endpoint ?? null}
-                binaryPath={channel?.binaryPath ?? null}
-              />
-            ) : mainMode === "theme" ? (
-              <ThemeView theme={theme} onTheme={setTheme} />
-            ) : mainMode === "settings" ? (
-              <SettingsView
-                health={library.health}
-                theme={theme}
-                onTheme={setTheme}
-                onChanged={library.reload}
-                onOpenThemeStudio={() => setMainMode("theme")}
-              />
-            ) : activeTab ? (
+            {activeTab === null ? (
+              <Welcome error={library.error} onOpenView={openView} />
+            ) : activeTab.kind === "memory" ? (
               <Editor
                 tab={activeTab}
                 saving={saving}
@@ -548,21 +528,24 @@ export default function App() {
                 }
                 onSave={saveTab}
                 onDelete={deleteActive}
-                onOpenWikilink={(targetSlug) => {
-                  const project = activeTab.project;
-                  openMemory(project, targetSlug);
-                }}
+                onOpenWikilink={(targetSlug) => openMemory(activeTab.project, targetSlug)}
               />
+            ) : activeTab.view === "graph" ? (
+              <GraphView
+                projects={library.projects}
+                activeProject={activeMemory?.project ?? null}
+                onOpenMemory={openMemory}
+              />
+            ) : activeTab.view === "mcp" ? (
+              <McpView
+                health={library.health}
+                endpoint={channel?.endpoint ?? null}
+                binaryPath={channel?.binaryPath ?? null}
+              />
+            ) : activeTab.view === "theme" ? (
+              <ThemeView theme={theme} onTheme={setTheme} />
             ) : (
-              <Welcome
-                error={library.error}
-                onOpenGraph={() => {
-                  setView("graph");
-                  setMainMode("graph");
-                }}
-                onOpenMcp={() => setMainMode("mcp")}
-                onOpenTheme={() => setMainMode("theme")}
-              />
+              <SettingsView health={library.health} onChanged={library.reload} />
             )}
           </div>
 
@@ -575,7 +558,7 @@ export default function App() {
               results={results}
               searchError={searchError}
               backlinks={backlinks}
-              backlinksFor={activeTab?.slug ?? null}
+              backlinksFor={activeMemory?.slug ?? null}
               endpoint={channel?.endpoint ?? null}
               daemonRoot={library.health?.root ?? null}
               log={log}
@@ -588,22 +571,23 @@ export default function App() {
       <StatusBar
         health={library.health}
         connected={channel !== null && !fatal}
-        activeProject={activeTab?.project ?? null}
+        activeProject={activeMemory?.project ?? null}
         dirtyCount={dirtyCount}
         theme={theme}
         onTheme={setTheme}
         onTogglePanel={() => setPanelOpen((v) => !v)}
-        onOpenThemeStudio={() => setMainMode("theme")}
       />
 
-      {quickOpen && (
+      {palette && (
         <QuickOpen
           memories={allMemories}
+          commands={commands}
+          commandMode={palette === "commands"}
           onPick={(meta) => {
-            setQuickOpen(false);
+            setPalette(null);
             openMemory(meta.project, meta.slug);
           }}
-          onClose={() => setQuickOpen(false)}
+          onClose={() => setPalette(null)}
         />
       )}
 
@@ -614,14 +598,10 @@ export default function App() {
 
 function Welcome({
   error,
-  onOpenGraph,
-  onOpenMcp,
-  onOpenTheme,
+  onOpenView,
 }: {
   error: string | null;
-  onOpenGraph?: () => void;
-  onOpenMcp?: () => void;
-  onOpenTheme?: () => void;
+  onOpenView: (view: ViewId) => void;
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center text-ink-dim select-none">
@@ -634,49 +614,39 @@ function Welcome({
         <p className="max-w-md text-danger">{error}</p>
       ) : (
         <p className="max-w-md text-xs text-ink-dim">
-          Pick a memory from the Explorer on the left, or press{" "}
-          <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px] bg-shell">Ctrl+P</kbd> to quickly search memories.
+          Pick a memory from the Explorer on the left, press{" "}
+          <kbd className="rounded border border-line bg-shell px-1.5 py-0.5 font-mono text-[11px]">Ctrl+P</kbd>{" "}
+          to jump to one, or{" "}
+          <kbd className="rounded border border-line bg-shell px-1.5 py-0.5 font-mono text-[11px]">Ctrl+Shift+P</kbd>{" "}
+          for commands.
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
-        {onOpenGraph && (
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+        {(
+          [
+            ["graph", GraphIcon, "text-tag", "Knowledge Graph"],
+            ["mcp", PlugIcon, "text-accent", "AI & MCP Integration"],
+            ["theme", PaletteIcon, "text-accent", "Theme Studio"],
+          ] as const
+        ).map(([view, Icon, tint, label]) => (
           <button
+            key={view}
             type="button"
-            onClick={onOpenGraph}
-            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover hover:border-tag transition-all shadow-xs"
+            onClick={() => onOpenView(view)}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink shadow-xs transition-all hover:border-accent hover:bg-hover"
           >
-            <GraphIcon className="h-3.5 w-3.5 text-tag" />
-            <span>Knowledge Graph</span>
+            <Icon className={`h-3.5 w-3.5 ${tint}`} />
+            <span>{label}</span>
           </button>
-        )}
-
-        {onOpenMcp && (
-          <button
-            type="button"
-            onClick={onOpenMcp}
-            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover hover:border-accent transition-all shadow-xs"
-          >
-            <PlugIcon className="h-3.5 w-3.5 text-accent" />
-            <span>AI &amp; MCP Integration</span>
-          </button>
-        )}
-
-        {onOpenTheme && (
-          <button
-            type="button"
-            onClick={onOpenTheme}
-            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover hover:border-accent transition-all shadow-xs"
-          >
-            <PaletteIcon className="h-3.5 w-3.5 text-accent" />
-            <span>Theme Studio</span>
-          </button>
-        )}
+        ))}
       </div>
 
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-left font-mono text-[11px] text-ink-faint border-t border-line/60 pt-4">
         <dt>Ctrl+P</dt>
         <dd>go to memory</dd>
+        <dt>Ctrl+Shift+P</dt>
+        <dd>run a command</dd>
         <dt>Ctrl+Shift+F</dt>
         <dd>search memories</dd>
         <dt>Ctrl+B</dt>

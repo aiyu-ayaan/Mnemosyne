@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { api, bridge } from "../lib/bridge";
-import { THEMES, type Health, type Settings, type ThemeId } from "../lib/types";
-import { CheckIcon, FolderIcon, PaletteIcon } from "./Icons";
+import type { Health, Settings } from "../lib/types";
+import { FolderIcon } from "./Icons";
 
 type Props = {
   health: Health | null;
-  theme: ThemeId;
-  onTheme: (theme: ThemeId) => void;
   onChanged: () => void;
-  onOpenThemeStudio?: () => void;
 };
 
-export default function SettingsView({ health, theme, onTheme, onChanged, onOpenThemeStudio }: Props) {
+export default function SettingsView({ health, onChanged }: Props) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -60,88 +57,8 @@ export default function SettingsView({ health, theme, onTheme, onChanged, onOpen
         </div>
       </div>
 
-      {/* Theme Section */}
-      <section>
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="flex items-center gap-1.5">
-            <PaletteIcon className="h-4 w-4 text-accent" />
-            <h3 className="font-semibold text-xs text-ink">Appearance & Theme</h3>
-          </div>
-          {onOpenThemeStudio && (
-            <button
-              type="button"
-              onClick={onOpenThemeStudio}
-              className="text-xs text-accent hover:underline font-medium"
-            >
-              Open Theme Studio →
-            </button>
-          )}
-        </div>
-        <p className="text-[11px] text-ink-faint mb-3">
-          Select a developer theme tailored for long coding sessions and knowledge work.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {THEMES.map((item) => {
-            const isSelected = theme === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onTheme(item.id)}
-                className={`group flex items-center justify-between rounded-md border p-2 text-left transition-all ${
-                  isSelected
-                    ? "border-accent bg-selected/20 shadow-xs"
-                    : "border-line bg-raised/60 hover:border-ink-faint hover:bg-raised"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  {/* Theme Color Palette Preview Swatch */}
-                  <div className="flex items-center -space-x-1 rounded border border-line p-0.5 bg-shell shrink-0">
-                    <span
-                      className="h-4 w-4 rounded-full border border-black/20"
-                      style={{ backgroundColor: item.primaryBg }}
-                      title="Shell"
-                    />
-                    <span
-                      className="h-4 w-4 rounded-full border border-black/20"
-                      style={{ backgroundColor: item.editorBg }}
-                      title="Editor"
-                    />
-                    <span
-                      className="h-4 w-4 rounded-full border border-black/20"
-                      style={{ backgroundColor: item.accent }}
-                      title="Accent"
-                    />
-                    <span
-                      className="h-4 w-4 rounded-full border border-black/20"
-                      style={{ backgroundColor: item.tag }}
-                      title="Tag"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-medium text-ink">{item.name}</div>
-                    <div className="font-mono text-[10px] text-ink-faint capitalize">
-                      {item.category} mode
-                    </div>
-                  </div>
-                </div>
-
-                {isSelected && (
-                  <span className="flex items-center gap-1 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                    <CheckIcon className="h-3 w-3" />
-                    Active
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
       {/* Memory Root Storage Section */}
-      <section className="border-t border-line pt-4">
+      <section>
         <div className="flex items-center gap-1.5 mb-1.5">
           <FolderIcon className="h-4 w-4 text-accent" />
           <h3 className="font-semibold text-xs text-ink">Memory Storage Root</h3>

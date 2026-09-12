@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { withEdits, type OpenTab } from "../lib/tabs";
+import { withEdits, type MemoryTab } from "../lib/tabs";
 import {
   BoldIcon,
   CheckIcon,
@@ -20,10 +20,10 @@ import {
 } from "./Icons";
 
 type Props = {
-  tab: OpenTab;
+  tab: MemoryTab;
   saving: boolean;
   error: string | null;
-  onChange: (next: OpenTab) => void;
+  onChange: (next: MemoryTab) => void;
   onSave: () => void;
   onDelete: () => void;
   onOpenWikilink?: (slug: string) => void;
@@ -54,7 +54,7 @@ export default function Editor({
     if (tab.slug === null) titleRef.current?.focus();
   }, [tab.key, tab.slug]);
 
-  const edit = (edits: Partial<OpenTab>) => onChange(withEdits(tab, edits));
+  const edit = (edits: Partial<MemoryTab>) => onChange(withEdits(tab, edits));
 
   // Toolbar action helpers
   const insertFormat = (before: string, after: string = "", defaultText: string = "") => {

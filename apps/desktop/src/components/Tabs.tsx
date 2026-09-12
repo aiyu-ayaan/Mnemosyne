@@ -1,206 +1,127 @@
-import type { OpenTab } from "../lib/tabs";
-import { CloseIcon, GraphIcon, PaletteIcon, PlugIcon, SettingsIcon } from "./Icons";
-
-export type MainMode = "editor" | "graph" | "mcp" | "theme" | "settings";
+import type { OpenTab, ViewId } from "../lib/tabs";
+import {
+  CloseIcon,
+  DocIcon,
+  GraphIcon,
+  PaletteIcon,
+  PlugIcon,
+  SettingsIcon,
+} from "./Icons";
 
 type Props = {
   tabs: OpenTab[];
   activeKey: string | null;
   onSelect: (key: string) => void;
   onClose: (key: string) => void;
-  mainMode: MainMode;
-  onCloseSpecial: () => void;
-  onSelectMode: (mode: MainMode) => void;
 };
 
-export default function Tabs({
-  tabs,
-  activeKey,
-  onSelect,
-  onClose,
-  mainMode,
-  onCloseSpecial,
-  onSelectMode,
-}: Props) {
-  const isSpecialActive = mainMode !== "editor";
-  if (tabs.length === 0 && !isSpecialActive) return null;
+const VIEW_ICONS: Record<ViewId, (p: { className?: string }) => React.JSX.Element> = {
+  graph: GraphIcon,
+  mcp: PlugIcon,
+  theme: PaletteIcon,
+  settings: SettingsIcon,
+};
+
+/** Accent per view, so a tab is recognisable before its label is read. */
+const VIEW_TINTS: Record<ViewId, string> = {
+  graph: "text-tag",
+  mcp: "text-accent",
+  theme: "text-accent",
+  settings: "text-ink-dim",
+};
+
+/**
+ * The four convention slugs get their own mark. A memory library is mostly
+ * these four per project, so tinting them is what makes a row of tabs scannable
+ * rather than a row of identical document icons.
+ */
+const SLUG_MARKS: Record<string, { glyph: string; tint: string }> = {
+  todo: { glyph: "☑", tint: "text-warn" },
+  decisions: { glyph: "◆", tint: "text-accent" },
+  conventions: { glyph: "§", tint: "text-tag" },
+  "dev-log": { glyph: "❯", tint: "text-ink-dim" },
+};
+
+export default function Tabs({ tabs, activeKey, onSelect, onClose }: Props) {
+  if (tabs.length === 0) return null;
 
   return (
-    <div role="tablist" className="flex shrink-0 items-center overflow-x-auto border-b border-line bg-shell select-none">
-      {/* Open memory tabs */}
+    <div
+      role="tablist"
+      className="flex shrink-0 items-stretch overflow-x-auto border-b border-line bg-shell select-none"
+    >
       {tabs.map((tab) => {
-        const active = !isSpecialActive && tab.key === activeKey;
+        const active = tab.key === activeKey;
+        const label = tab.kind === "memory" ? tab.title || tab.slug || "Untitled" : tab.title;
+
         return (
           <div
             key={tab.key}
             role="tab"
             aria-selected={active}
-            className={`group flex max-w-56 shrink-0 items-center gap-2 border-r border-line px-3 py-1.5 transition-colors ${
-              active ? "bg-editor text-ink font-medium" : "text-ink-dim hover:text-ink hover:bg-hover/50"
+            title={tab.kind === "memory" ? `${tab.project}/${tab.slug ?? "new"}` : tab.title}
+            className={`group relative flex max-w-56 shrink-0 items-center gap-2 border-r border-line pl-3 pr-2 py-1.5 transition-colors ${
+              active ? "bg-editor text-ink" : "text-ink-dim hover:bg-hover/50 hover:text-ink"
             }`}
           >
+            {/* Top rule on the active tab rather than VS Code's, so the strip
+                reads as Mnemosyne's without losing the "this one" signal. */}
+            {active && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
+
             <button
               type="button"
               onClick={() => onSelect(tab.key)}
               className="flex min-w-0 items-center gap-1.5"
-              title={`${tab.project}/${tab.slug ?? "new"}`}
             >
-              <span className={`text-[10px] ${tab.dirty ? "text-warn font-bold" : "text-ink-faint"}`}>
-                {tab.dirty ? "●" : "◇"}
-              </span>
-              <span className="truncate text-xs">{tab.title || tab.slug || "Untitled"}</span>
+              <TabMark tab={tab} />
+              <span className="truncate text-xs">{label}</span>
             </button>
+
             <button
               type="button"
-              aria-label={`Close ${tab.title || tab.slug || "Untitled"}`}
+              aria-label={`Close ${label}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onClose(tab.key);
               }}
               className={`rounded p-0.5 hover:bg-hover ${
-                active ? "opacity-70" : "opacity-0 group-hover:opacity-70"
+                active || (tab.kind === "memory" && tab.dirty)
+                  ? "opacity-70"
+                  : "opacity-0 group-hover:opacity-70"
               }`}
             >
-              <CloseIcon className="h-3 w-3" />
+              {tab.kind === "memory" && tab.dirty ? (
+                <span className="block h-3 w-3 text-center text-[10px] leading-3 text-warn group-hover:hidden">
+                  ●
+                </span>
+              ) : null}
+              <CloseIcon
+                className={`h-3 w-3 ${
+                  tab.kind === "memory" && tab.dirty ? "hidden group-hover:block" : ""
+                }`}
+              />
             </button>
           </div>
         );
       })}
-
-      {/* Special Content Pane Tabs */}
-      {mainMode === "mcp" && (
-        <div
-          role="tab"
-          aria-selected={true}
-          className="group flex max-w-56 shrink-0 items-center gap-2 border-r border-line bg-editor px-3 py-1.5 text-ink font-medium shadow-xs"
-        >
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink">
-            <PlugIcon className="h-3.5 w-3.5 text-accent" />
-            <span className="truncate">MCP Clients</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Close MCP Clients tab"
-            onClick={onCloseSpecial}
-            className="rounded p-0.5 text-ink-dim hover:bg-hover hover:text-ink transition-colors"
-          >
-            <CloseIcon className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {mainMode === "theme" && (
-        <div
-          role="tab"
-          aria-selected={true}
-          className="group flex max-w-56 shrink-0 items-center gap-2 border-r border-line bg-editor px-3 py-1.5 text-ink font-medium shadow-xs"
-        >
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink">
-            <PaletteIcon className="h-3.5 w-3.5 text-accent" />
-            <span className="truncate">Theme Studio</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Close Theme Studio tab"
-            onClick={onCloseSpecial}
-            className="rounded p-0.5 text-ink-dim hover:bg-hover hover:text-ink transition-colors"
-          >
-            <CloseIcon className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {mainMode === "settings" && (
-        <div
-          role="tab"
-          aria-selected={true}
-          className="group flex max-w-56 shrink-0 items-center gap-2 border-r border-line bg-editor px-3 py-1.5 text-ink font-medium shadow-xs"
-        >
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink">
-            <SettingsIcon className="h-3.5 w-3.5 text-accent" />
-            <span className="truncate">Settings</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Close Settings tab"
-            onClick={onCloseSpecial}
-            className="rounded p-0.5 text-ink-dim hover:bg-hover hover:text-ink transition-colors"
-          >
-            <CloseIcon className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {mainMode === "graph" && (
-        <div
-          role="tab"
-          aria-selected={true}
-          className="group flex max-w-56 shrink-0 items-center gap-2 border-r border-line bg-editor px-3 py-1.5 text-ink font-medium shadow-xs"
-        >
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink">
-            <GraphIcon className="h-3.5 w-3.5 text-tag" />
-            <span className="truncate">Knowledge Graph</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Close Knowledge Graph tab"
-            onClick={onCloseSpecial}
-            className="rounded p-0.5 text-ink-dim hover:bg-hover hover:text-ink transition-colors"
-          >
-            <CloseIcon className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {/* Right side quick view shortcuts */}
-      <div className="ml-auto flex shrink-0 items-center gap-1 px-2 text-xs">
-        <button
-          type="button"
-          title="Toggle Knowledge Graph View"
-          onClick={() => onSelectMode(mainMode === "graph" ? "editor" : "graph")}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${
-            mainMode === "graph" ? "bg-hover text-ink font-semibold" : "text-ink-faint hover:text-ink hover:bg-hover/50"
-          }`}
-        >
-          <GraphIcon className="h-3 w-3 text-tag" />
-          <span>Graph</span>
-        </button>
-
-        <button
-          type="button"
-          title="Open MCP Clients View"
-          onClick={() => onSelectMode(mainMode === "mcp" ? "editor" : "mcp")}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${
-            mainMode === "mcp" ? "bg-hover text-ink font-semibold" : "text-ink-faint hover:text-ink hover:bg-hover/50"
-          }`}
-        >
-          <PlugIcon className="h-3 w-3 text-accent" />
-          <span>MCP</span>
-        </button>
-
-        <button
-          type="button"
-          title="Open Theme Studio"
-          onClick={() => onSelectMode(mainMode === "theme" ? "editor" : "theme")}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${
-            mainMode === "theme" ? "bg-hover text-ink font-semibold" : "text-ink-faint hover:text-ink hover:bg-hover/50"
-          }`}
-        >
-          <PaletteIcon className="h-3 w-3 text-accent" />
-          <span>Theme</span>
-        </button>
-
-        <button
-          type="button"
-          title="Open Settings"
-          onClick={() => onSelectMode(mainMode === "settings" ? "editor" : "settings")}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${
-            mainMode === "settings" ? "bg-hover text-ink font-semibold" : "text-ink-faint hover:text-ink hover:bg-hover/50"
-          }`}
-        >
-          <SettingsIcon className="h-3 w-3" />
-        </button>
-      </div>
     </div>
   );
+}
+
+/** The glyph at the head of a tab: a view's icon, or a memory's kind. */
+function TabMark({ tab }: { tab: OpenTab }) {
+  if (tab.kind === "view") {
+    const Icon = VIEW_ICONS[tab.view];
+    return <Icon className={`h-3.5 w-3.5 shrink-0 ${VIEW_TINTS[tab.view]}`} />;
+  }
+
+  const mark = tab.slug ? SLUG_MARKS[tab.slug] : undefined;
+  if (mark) {
+    return (
+      <span className={`shrink-0 text-[11px] leading-none ${mark.tint}`} aria-hidden>
+        {mark.glyph}
+      </span>
+    );
+  }
+  return <DocIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />;
 }
