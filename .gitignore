@@ -1,0 +1,16 @@
+# Build output
+/bin/
+/dist/
+mnemosyne
+mnemosyne.exe
+
+# Go
+*.test
+*.out
+
+# Node (Phase 2)
+node_modules/
+
+# Local scratch
+*.local
+.DS_Store

@@ -1,0 +1,12 @@
+{
+  "name": "@mnemosyne/backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Go memory core, MCP server, and REST API",
+  "scripts": {
+    "build": "go build -o ../../bin/ ./cmd/mnemosyne",
+    "test": "go test ./...",
+    "lint": "go vet ./...",
+    "dev": "go run ./cmd/mnemosyne serve"
+  }
+}

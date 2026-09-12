@@ -1,0 +1,14 @@
+{
+  "name": "mnemosyne",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local MCP server for per-project AI memories",
+  "license": "MIT",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "dev": "pnpm --filter @mnemosyne/backend dev"
+  }
+}

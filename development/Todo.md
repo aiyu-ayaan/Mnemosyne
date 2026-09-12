@@ -18,12 +18,12 @@ plain Markdown files in a folder they chose.
 That is the whole product value in one sentence. Everything else — GUI, graph
 view, vectors, encryption — makes it nicer, not functional. So it comes later.
 
-- [ ] **1.1 Repo skeleton** — Go module, directory layout, `.gitignore`, MIT `LICENSE`
-- [ ] **1.2 Storage layer** — Markdown + YAML frontmatter on disk, project = directory
-  - [ ] Memory read/write/delete, slug generation, frontmatter round-trip
-  - [ ] Project create/list/delete
-  - [ ] Path containment guard (no escaping the memory root)
-  - [ ] Unit tests
+- [x] **1.1 Repo skeleton** — pnpm workspace, Go module under `apps/backend`, `.gitignore`, MIT `LICENSE`
+- [x] **1.2 Storage layer** — Markdown + YAML frontmatter on disk, project = directory
+  - [x] Memory read/write/delete, slug generation, frontmatter round-trip
+  - [x] Project create/list/delete
+  - [x] Path containment guard (no escaping the memory root)
+  - [x] Unit tests
 - [ ] **1.3 Search index** — SQLite (`modernc.org/sqlite`, pure Go) + FTS5
   - [ ] Schema + migrations
   - [ ] Index sync on write/delete; full reconcile on startup

@@ -75,3 +75,35 @@ will not appear in search until the next reconcile. File writes are the opposite
 — they are atomic (write to a temp file in the same directory, then rename) and
 a failure surfaces to the caller. Losing a memory is unacceptable; losing a
 search result until the next startup is not.
+
+## Repository layout
+
+The repo is a **pnpm workspace**, so one command drives the Go backend and the
+Electron frontend and contributors do not have to remember which tool builds
+which half.
+
+```
+package.json          workspace scripts: build, test, lint, dev
+pnpm-workspace.yaml   packages: apps/*
+apps/
+  backend/            Go module — package.json wraps go build/test/vet
+    cmd/mnemosyne/    the binary
+    internal/
+      markdown/       frontmatter and slugs; one file in, one file out
+      store/          the core: projects, memories, path safety, atomic writes
+      index/          SQLite + FTS5
+      mcpserver/      MCP tool definitions
+  desktop/            Electron + React + Vite            [Phase 2]
+development/          roadmap, dev docs, commit guidelines
+```
+
+`apps/backend/package.json` holds no npm dependencies — it exists so that
+`pnpm build` and `pnpm test` at the root reach the Go toolchain through the same
+workspace graph as the frontend.
+
+| Command      | Effect                                              |
+| ------------ | --------------------------------------------------- |
+| `pnpm build` | Builds every package; the Go binary lands in `bin/` |
+| `pnpm test`  | `go test ./...`, and the frontend suite once it exists |
+| `pnpm lint`  | `go vet ./...`                                      |
+| `pnpm dev`   | Runs the MCP server from source                     |
