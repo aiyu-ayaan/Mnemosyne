@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -117,17 +119,22 @@ func (m *Memory) Format() ([]byte, error) {
 		}
 	}
 
-	var buf bytes.Buffer
-	buf.WriteString(delimiter + "\n")
-
-	// yaml.Marshal on a map sorts keys alphabetically, which would scatter the
-	// fields a human reads first. The ordered ones are written by hand.
-	enc := func(key string, value any) error {
-		out, err := yaml.Marshal(map[string]any{key: value})
-		if err != nil {
+	// A mapping node keeps insertion order, unlike a Go map, which yaml sorts
+	// alphabetically. These files are read and edited by hand, so the fields a
+	// person looks for first are written first.
+	mapping := &yaml.Node{Kind: yaml.MappingNode}
+	add := func(key string, value any) error {
+		var node yaml.Node
+		if err := node.Encode(value); err != nil {
 			return fmt.Errorf("encode %s: %w", key, err)
 		}
-		buf.Write(out)
+		// Short string lists read better on one line, and that is the
+		// convention every other Markdown tool writes frontmatter in.
+		if _, ok := value.([]string); ok {
+			node.Style = yaml.FlowStyle
+		}
+		mapping.Content = append(mapping.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: key}, &node)
 		return nil
 	}
 
@@ -140,22 +147,33 @@ func (m *Memory) Format() ([]byte, error) {
 		{"title", m.Title, m.Title == ""},
 		{"tags", m.Tags, len(m.Tags) == 0},
 		{"links", m.Links, len(m.Links) == 0},
-		{"created", m.Created.UTC().Format(time.RFC3339), m.Created.IsZero()},
-		{"updated", m.Updated.UTC().Format(time.RFC3339), m.Updated.IsZero()},
+		{"created", m.Created.UTC(), m.Created.IsZero()},
+		{"updated", m.Updated.UTC(), m.Updated.IsZero()},
 	}
 	for _, f := range ordered {
 		if f.omit {
 			continue
 		}
-		if err := enc(f.key, f.value); err != nil {
+		if err := add(f.key, f.value); err != nil {
 			return nil, err
 		}
 	}
 
-	if len(front) > 0 {
-		out, err := yaml.Marshal(front)
+	// Preserved keys are sorted so that an unchanged memory keeps producing an
+	// identical file rather than a reshuffled one.
+	for _, key := range slices.Sorted(maps.Keys(front)) {
+		if err := add(key, front[key]); err != nil {
+			return nil, err
+		}
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString(delimiter + "\n")
+
+	if len(mapping.Content) > 0 {
+		out, err := yaml.Marshal(mapping)
 		if err != nil {
-			return nil, fmt.Errorf("encode preserved frontmatter: %w", err)
+			return nil, fmt.Errorf("encode frontmatter: %w", err)
 		}
 		buf.Write(out)
 	}

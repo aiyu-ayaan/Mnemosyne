@@ -140,6 +140,42 @@ func TestFormatIsStable(t *testing.T) {
 	}
 }
 
+// TestFormatMatchesDocumentedShape pins the exact bytes written to disk. These
+// files are edited by hand and shown in the docs, so the layout is part of the
+// product, not an implementation detail.
+func TestFormatMatchesDocumentedShape(t *testing.T) {
+	at := time.Date(2026, 9, 12, 22, 40, 11, 0, time.UTC)
+	m := &Memory{
+		ID:      "01JD3K7QW8ZX4N2P",
+		Title:   "Use FTS5, not vectors",
+		Tags:    []string{"decision", "search"},
+		Links:   []string{"storage-is-file-first"},
+		Created: at,
+		Updated: at,
+		Body:    "sqlite-vec needs cgo.\n",
+	}
+
+	want := `---
+id: 01JD3K7QW8ZX4N2P
+title: Use FTS5, not vectors
+tags: [decision, search]
+links: [storage-is-file-first]
+created: 2026-09-12T22:40:11Z
+updated: 2026-09-12T22:40:11Z
+---
+
+sqlite-vec needs cgo.
+`
+
+	got, err := m.Format()
+	if err != nil {
+		t.Fatalf("Format: %v", err)
+	}
+	if string(got) != want {
+		t.Errorf("Format() produced:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Use FTS5, not vectors":  "use-fts5-not-vectors",

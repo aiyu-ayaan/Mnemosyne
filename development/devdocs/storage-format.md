@@ -5,8 +5,7 @@
 ```
 <memory-root>/                     configurable; default below
 ├── .mnemosyne/
-│   ├── index.db                   SQLite + FTS5 — derived, safe to delete
-│   └── config.json                settings owned by the app
+│   └── index.db                   SQLite + FTS5 — derived, safe to delete
 ├── mnemosyne/                     a project = a directory
 │   ├── project.json               project metadata
 │   ├── use-fts5-not-vectors.md
@@ -15,15 +14,30 @@
     └── ...
 ```
 
-Default memory root:
+## Where the root lives
 
-| OS      | Path                                          |
-| ------- | --------------------------------------------- |
-| Windows | `%APPDATA%\Mnemosyne`                         |
-| macOS   | `~/Library/Application Support/Mnemosyne`     |
-| Linux   | `$XDG_DATA_HOME/mnemosyne` → `~/.local/share/mnemosyne` |
+The settings file cannot live inside the memory root, because it is what says
+where that root is. It sits in the user config directory instead, and the
+default root sits beside it:
 
-Resolution order: `--root` flag → `MNEMOSYNE_ROOT` env → `config.json` → default.
+| Purpose       | Path                                        |
+| ------------- | ------------------------------------------- |
+| Settings      | `<user config dir>/mnemosyne/config.json`   |
+| Default root  | `<user config dir>/mnemosyne/memories`      |
+
+`<user config dir>` is `%APPDATA%` on Windows, `~/Library/Application Support`
+on macOS, and `$XDG_CONFIG_HOME` (usually `~/.config`) on Linux. One layout on
+every platform beats three special cases that are easy to confuse.
+
+Resolution order, most specific first:
+
+1. `--root <path>`
+2. `MNEMOSYNE_ROOT`
+3. `root` in the settings file
+4. the default above
+
+`mnemosyne doctor` prints the resolved root and which of the four chose it, so a
+surprising answer can be explained rather than guessed at.
 
 ## A memory
 

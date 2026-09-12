@@ -33,7 +33,7 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] Tools: `list_projects`, `list_memories`, `read_memory`, `write_memory`,
         `delete_memory`, `search_memories`
   - [x] Tool-level tests driving a real server over an in-memory transport
-- [ ] **1.5 CLI + config** — `mnemosyne serve`, `mnemosyne doctor`, config file
+- [x] **1.5 CLI + config** — `serve`, `doctor`, `root`, `version`; root
       resolution (flag → env → config file → OS default dir)
 - [ ] **1.6 Docs + release** — README, install and MCP wiring instructions for
       Claude Code and Codex, `devdocs` refresh

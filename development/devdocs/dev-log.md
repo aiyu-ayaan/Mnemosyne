@@ -3,6 +3,34 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 4 — CLI and configuration
+
+`internal/config` and `cmd/mnemosyne`. The binary now runs.
+
+- `mnemosyne serve` — MCP over stdio, the command an agent starts.
+- `mnemosyne doctor` — resolved root, which rule chose it, index state, counts.
+- `mnemosyne root [path]` — print or set the memory root.
+
+**Verified end to end, not just in tests:** `pnpm build` produced `bin/mnemosyne.exe`,
+and a Python MCP client drove the real binary over stdio through initialize,
+tools/list, two writes, a ranked search, list_projects, a read, and a
+deliberate miss. The files it wrote were then checked on disk.
+
+**Decisions taken here**
+
+- *The settings file lives outside the memory root.* It is what says where the
+  root is, so it cannot live inside it. Settings and the default root now share
+  one directory under the user config dir, identical on every platform, instead
+  of three per-OS special cases.
+- *`doctor` reports which rule chose the root.* A surprising root should be
+  explainable, not just stated.
+- *Formatting matches the documented shape, and a test pins the exact bytes.*
+  The smoke test showed block-style tag lists and quoted timestamps where the
+  docs promised inline lists and bare ones. These files are edited by hand and
+  printed in the docs, so the layout is part of the product; `Format` now builds
+  a yaml mapping node to control field order and list style.
+- *All logging goes to stderr.* Stdout carries JSON-RPC and nothing else.
+
 ## Stage 3 — MCP server
 
 `internal/mcpserver` exposes the store over MCP using the official Go SDK, with
