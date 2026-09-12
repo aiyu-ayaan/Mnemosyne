@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aiyu-ayaan/mnemosyne/internal/events"
 	"github.com/aiyu-ayaan/mnemosyne/internal/index"
 	"github.com/aiyu-ayaan/mnemosyne/internal/markdown"
 )
@@ -81,6 +82,9 @@ func (s *Store) Reconcile() (int, error) {
 				slog.Warn("could not index memory", "project", p.Slug, "memory", slug, "err", err)
 				continue
 			}
+			// Reconcile is how a change Mnemosyne did not make gets noticed, so
+			// it is also where the event for that change comes from.
+			s.publish(events.MemoryWritten, p.Slug, slug)
 			changed++
 		}
 	}
@@ -98,9 +102,13 @@ func (s *Store) Reconcile() (int, error) {
 			slog.Warn("could not drop stale index row", "project", project, "memory", slug, "err", err)
 			continue
 		}
+		s.publish(events.MemoryDeleted, project, slug)
 		changed++
 	}
 
+	if changed > 0 {
+		s.bus.Publish(events.Event{Kind: events.IndexReconciled, Count: changed})
+	}
 	return changed, nil
 }
 

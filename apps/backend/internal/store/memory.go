@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aiyu-ayaan/mnemosyne/internal/events"
 	"github.com/aiyu-ayaan/mnemosyne/internal/markdown"
 )
 
@@ -47,7 +48,7 @@ type WriteRequest struct {
 // memoryPath validates a memory slug and returns its file path.
 func (s *Store) memoryPath(dir, slug string) (string, error) {
 	if !markdown.ValidSlug(slug) {
-		return "", fmt.Errorf("invalid memory name %q: use lowercase letters, digits, and hyphens", slug)
+		return "", fmt.Errorf("invalid memory name %q: use lowercase letters, digits, and hyphens: %w", slug, ErrInvalid)
 	}
 	path := filepath.Join(dir, slug+memoryExt)
 	if err := s.contained(path); err != nil {
@@ -139,7 +140,7 @@ func (s *Store) ReadMemory(project, ref string) (*Memory, error) {
 // It reports whether a new memory was created.
 func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 	if strings.TrimSpace(req.Title) == "" && req.Memory == "" {
-		return nil, false, fmt.Errorf("a new memory needs a title")
+		return nil, false, fmt.Errorf("a new memory needs a title: %w", ErrInvalid)
 	}
 	if _, err := s.EnsureProject(req.Project); err != nil {
 		return nil, false, err
@@ -211,6 +212,7 @@ func (s *Store) WriteMemory(req WriteRequest) (*Memory, bool, error) {
 
 	written := &Memory{Meta: metaFrom(req.Project, slug, doc), Body: doc.Body}
 	s.reindex(written)
+	s.publish(events.MemoryWritten, req.Project, slug)
 	return written, created, nil
 }
 
@@ -232,6 +234,7 @@ func (s *Store) DeleteMemory(project, ref string) error {
 		return fmt.Errorf("memory %q in project %q: %w", ref, project, ErrNotFound)
 	}
 	s.unindex(project, slug)
+	s.publish(events.MemoryDeleted, project, slug)
 	return nil
 }
 
@@ -240,7 +243,7 @@ func (s *Store) DeleteMemory(project, ref string) error {
 // rename.
 func (s *Store) resolveRef(project, dir, ref string) (string, error) {
 	if ref == "" {
-		return "", fmt.Errorf("memory reference is empty")
+		return "", fmt.Errorf("memory reference is empty: %w", ErrInvalid)
 	}
 	if markdown.ValidSlug(ref) {
 		if path, err := s.memoryPath(dir, ref); err == nil {
@@ -251,7 +254,7 @@ func (s *Store) resolveRef(project, dir, ref string) (string, error) {
 	} else if !markdown.LooksLikeID(ref) {
 		// Neither a usable slug nor an id. Saying so beats scanning the project
 		// to conclude the same thing, and tells the caller what was wrong.
-		return "", fmt.Errorf("invalid memory name %q: use a slug or an id", ref)
+		return "", fmt.Errorf("invalid memory name %q: use a slug or an id: %w", ref, ErrInvalid)
 	}
 
 	// Only an id-shaped reference is worth a scan, which is what lets an id

@@ -52,6 +52,11 @@ type Locations struct {
 
 	// DefaultRoot is the memory root used when nothing else selects one.
 	DefaultRoot string
+
+	// RuntimeDir holds files that describe the running daemon — the token, the
+	// unix socket, the pid. It is not the memory root: nothing in here survives
+	// a reboot, and deleting it costs a daemon restart and nothing else.
+	RuntimeDir string
 }
 
 // Detect works out the layout. forcePortable corresponds to --portable and
@@ -75,6 +80,7 @@ func Detect(forcePortable bool) (Locations, error) {
 			BinDir:      binDir,
 			ConfigPath:  filepath.Join(binDir, "config.json"),
 			DefaultRoot: filepath.Join(binDir, "memories"),
+			RuntimeDir:  filepath.Join(binDir, "run"),
 		}, nil
 	}
 
@@ -85,11 +91,32 @@ func Detect(forcePortable bool) (Locations, error) {
 	if err != nil {
 		return Locations{}, fmt.Errorf("locate the user config directory: %w", err)
 	}
+	runtime, err := runtimeDir()
+	if err != nil {
+		return Locations{}, err
+	}
 	return Locations{
 		BinDir:      binDir,
 		ConfigPath:  filepath.Join(dir, appDir, "config.json"),
 		DefaultRoot: filepath.Join(dir, appDir, "memories"),
+		RuntimeDir:  runtime,
 	}, nil
+}
+
+// runtimeDir picks a per-user directory for the daemon's transient files.
+//
+// XDG_RUNTIME_DIR is the right answer on Linux — it is already user-private and
+// cleared at logout. Elsewhere the user cache directory is the closest
+// equivalent that exists on every platform, and is still inside the profile.
+func runtimeDir() (string, error) {
+	if v := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR")); v != "" {
+		return filepath.Join(v, appDir), nil
+	}
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("locate a runtime directory: %w", err)
+	}
+	return filepath.Join(dir, appDir), nil
 }
 
 // binaryDir resolves the directory of the running executable, following any

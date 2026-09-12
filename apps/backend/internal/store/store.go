@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aiyu-ayaan/mnemosyne/internal/events"
 	"github.com/aiyu-ayaan/mnemosyne/internal/index"
 	"github.com/aiyu-ayaan/mnemosyne/internal/markdown"
 )
@@ -28,10 +29,16 @@ const projectFile = "project.json"
 // with errors.Is to turn it into their own transport's not-found response.
 var ErrNotFound = errors.New("not found")
 
+// ErrInvalid wraps a rejected argument — a malformed slug, a missing title.
+// Transports map it to a client error, so a typo in a project name reads as
+// "you sent something wrong" rather than "the server broke".
+var ErrInvalid = errors.New("invalid argument")
+
 // Store owns a memory root directory and the search index derived from it.
 type Store struct {
 	root  string
 	index *index.Index
+	bus   *events.Bus
 }
 
 // Project is a directory of memories.
@@ -51,6 +58,13 @@ type Project struct {
 // still reads and writes memories, and only search stops working. The files are
 // what matter.
 func Open(root string) (*Store, error) {
+	return OpenWith(root, events.NewBus())
+}
+
+// OpenWith is Open with a caller-supplied event bus. Changing the memory root
+// at runtime means closing one store and opening another; sharing the bus is
+// what keeps already-connected clients subscribed across that swap.
+func OpenWith(root string, bus *events.Bus) (*Store, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve memory root: %w", err)
@@ -59,7 +73,7 @@ func Open(root string) (*Store, error) {
 		return nil, fmt.Errorf("create memory root: %w", err)
 	}
 
-	s := &Store{root: abs}
+	s := &Store{root: abs, bus: bus}
 
 	ix, err := index.Open(s.InternalPath(IndexFile))
 	if err != nil {
@@ -87,6 +101,15 @@ func (s *Store) Close() error {
 // Root is the absolute path of the memory root.
 func (s *Store) Root() string { return s.root }
 
+// Events is the change bus. Callers that hold a connection open subscribe to
+// it so an edit made by an agent shows up in the desktop app without a poll.
+func (s *Store) Events() *events.Bus { return s.bus }
+
+// publish is a nil-safe shorthand, since a zero Store is used in tests.
+func (s *Store) publish(kind events.Kind, project, memory string) {
+	s.bus.Publish(events.Event{Kind: kind, Project: project, Memory: memory})
+}
+
 // InternalPath returns a path inside the root's .mnemosyne directory.
 func (s *Store) InternalPath(name string) string {
 	return filepath.Join(s.root, InternalDir, name)
@@ -97,7 +120,7 @@ func (s *Store) InternalPath(name string) string {
 // arbitrary files on the user's machine, so one guard is not enough.
 func (s *Store) projectDir(project string) (string, error) {
 	if !markdown.ValidSlug(project) {
-		return "", fmt.Errorf("invalid project name %q: use lowercase letters, digits, and hyphens", project)
+		return "", fmt.Errorf("invalid project name %q: use lowercase letters, digits, and hyphens: %w", project, ErrInvalid)
 	}
 	dir := filepath.Join(s.root, project)
 	if err := s.contained(dir); err != nil {
@@ -110,7 +133,7 @@ func (s *Store) projectDir(project string) (string, error) {
 func (s *Store) contained(path string) error {
 	rel, err := filepath.Rel(s.root, filepath.Clean(path))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("path %q escapes the memory root", path)
+		return fmt.Errorf("path %q escapes the memory root: %w", path, ErrInvalid)
 	}
 	return nil
 }
@@ -197,6 +220,7 @@ func (s *Store) EnsureProject(project string) (*Project, error) {
 	if err := writeFileAtomic(filepath.Join(dir, projectFile), append(data, '\n')); err != nil {
 		return nil, err
 	}
+	s.publish(events.ProjectWritten, project, "")
 	return &p, nil
 }
 
@@ -217,6 +241,7 @@ func (s *Store) DeleteProject(project string) error {
 			slog.Warn("could not clear project from index", "project", project, "err", err)
 		}
 	}
+	s.publish(events.ProjectDeleted, project, "")
 	return nil
 }
 
