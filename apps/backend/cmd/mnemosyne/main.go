@@ -31,6 +31,7 @@ Usage:
 Commands:
   serve       Run the MCP server over stdio (this is what an agent starts)
   daemon      Run the background service the desktop app connects to
+  stop        Stop the running daemon
   doctor      Show the resolved setup and what is in it
   root        Print or set the memory root
   install     Install the binary, put it on PATH, and start it at logon
@@ -74,6 +75,8 @@ func run(args []string) error {
 		return serve(rest)
 	case "daemon":
 		return daemonCmd(rest)
+	case "stop":
+		return stopCmd(rest)
 	case "doctor":
 		return doctor(rest)
 	case "root":

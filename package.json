@@ -12,7 +12,7 @@
     "dev": "pnpm --filter @mnemosyne/desktop dev",
     "dev:backend": "pnpm --filter @mnemosyne/backend dev",
     "build:backend": "pnpm --filter @mnemosyne/backend build",
-    "stop": ".\\bin\\mnemosyne.exe service stop",
+    "stop": "node scripts/stop.cjs",
     "doctor": ".\\bin\\mnemosyne.exe doctor",
     "mcp:tools": "pnpm build:backend && .\\bin\\mnemosyne.exe tools",
     "mcp:instructions": "pnpm build:backend && .\\bin\\mnemosyne.exe tools --full",

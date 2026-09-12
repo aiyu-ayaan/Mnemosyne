@@ -43,12 +43,13 @@ const heartbeat = 25 * time.Second
 
 // Server exposes the store over HTTP. It is safe for concurrent use.
 type Server struct {
-	mu    sync.RWMutex
-	store *store.Store
-	loc   config.Locations
-	token string
-	bus   *events.Bus
-	mux   *http.ServeMux
+	mu         sync.RWMutex
+	store      *store.Store
+	loc        config.Locations
+	token      string
+	bus        *events.Bus
+	mux        *http.ServeMux
+	onShutdown func()
 }
 
 // New wraps s. loc is where settings are read and written; token, when not
@@ -64,6 +65,13 @@ func New(s *store.Store, loc config.Locations, token string) *Server {
 	srv := &Server{store: s, loc: loc, token: token, bus: s.Events()}
 	srv.routes()
 	return srv
+}
+
+// SetOnShutdown registers a callback invoked when POST /v1/shutdown is requested.
+func (srv *Server) SetOnShutdown(fn func()) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	srv.onShutdown = fn
 }
 
 // Store is the current store. It may be replaced by a settings change, so
@@ -103,6 +111,7 @@ func (srv *Server) routes() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /v1/health", srv.health)
+	mux.HandleFunc("POST /v1/shutdown", srv.shutdown)
 	mux.HandleFunc("GET /v1/events", srv.streamEvents)
 
 	mux.HandleFunc("GET /v1/projects", srv.listProjects)
@@ -127,6 +136,22 @@ func (srv *Server) routes() {
 	mux.HandleFunc("PUT /v1/settings", srv.putSettings)
 
 	srv.mux = mux
+}
+
+func (srv *Server) shutdown(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "shutting down"})
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	srv.mu.RLock()
+	fn := srv.onShutdown
+	srv.mu.RUnlock()
+	if fn != nil {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			fn()
+		}()
+	}
 }
 
 // --- health and settings ---

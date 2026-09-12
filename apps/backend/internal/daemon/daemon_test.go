@@ -86,6 +86,58 @@ func TestDaemonServesOverTheLocalChannel(t *testing.T) {
 	}
 }
 
+func TestDaemonShutdownOverLocalChannel(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.Open(filepath.Join(dir, "memories"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+
+	loc := config.Locations{
+		Portable:    true,
+		BinDir:      dir,
+		ConfigPath:  filepath.Join(dir, "config.json"),
+		DefaultRoot: filepath.Join(dir, "memories"),
+		RuntimeDir:  filepath.Join(dir, "run"),
+	}
+	addr, err := channel.Resolve(loc.RuntimeDir, loc.Portable)
+	if err != nil {
+		t.Fatalf("resolve channel: %v", err)
+	}
+
+	ctx := context.Background()
+	done := make(chan error, 1)
+	go func() { done <- daemon.Run(ctx, daemon.Options{Store: s, Locations: loc, Poll: -1}) }()
+
+	token := waitForToken(t, addr)
+	client := addr.HTTPClient()
+
+	req, err := http.NewRequest("POST", channel.BaseURL+"/v1/shutdown", nil)
+	if err != nil {
+		t.Fatalf("build shutdown request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("shutdown over the channel: %v", err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("shutdown status = %d, want 200", res.StatusCode)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("daemon exited with error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not exit within 5s after /v1/shutdown")
+	}
+}
+
 // waitForToken polls for the token file, which is what tells a client the
 // daemon has finished starting. There is no readiness signal on the channel
 // itself, and a fixed sleep would be either slow or flaky.

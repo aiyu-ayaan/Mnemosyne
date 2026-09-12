@@ -86,6 +86,8 @@ function readChannel() {
   });
 }
 
+let spawnedDaemon = null;
+
 /**
  * Makes sure a daemon is answering, starting one if not.
  *
@@ -97,8 +99,13 @@ async function ensureDaemon() {
   let info = await readChannel();
   if (info.running) return info;
 
-  const child = spawn(findBinary(), ["daemon"], { detached: true, stdio: "ignore" });
-  child.unref();
+  const detached = app.isPackaged;
+  const child = spawn(findBinary(), ["daemon"], { detached, stdio: "ignore" });
+  if (detached) {
+    child.unref();
+  } else {
+    spawnedDaemon = child;
+  }
 
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -333,7 +340,33 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (eventStream) eventStream.destroy();
-  // The daemon is deliberately left running: it is the same per-user process
+  if (!app.isPackaged && spawnedDaemon) {
+    try {
+      request("POST", "/v1/shutdown").catch(() => {});
+      spawnedDaemon.kill();
+    } catch {}
+  }
+  // The daemon is deliberately left running in packaged mode: it is the same per-user process
   // the logon entry starts, and an agent's MCP session may be relying on it.
   if (process.platform !== "darwin") app.quit();
 });
+
+if (!app.isPackaged) {
+  const cleanup = () => {
+    if (spawnedDaemon) {
+      try {
+        request("POST", "/v1/shutdown").catch(() => {});
+        spawnedDaemon.kill();
+      } catch {}
+    }
+  };
+  app.on("before-quit", cleanup);
+  process.on("SIGINT", () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    cleanup();
+    process.exit(0);
+  });
+}

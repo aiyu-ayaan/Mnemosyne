@@ -293,4 +293,38 @@ func TestGraphAndBacklinks(t *testing.T) {
 	}
 }
 
+func TestShutdownEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.Open(filepath.Join(dir, "memories"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	loc := config.Locations{
+		ConfigPath:  filepath.Join(dir, "config.json"),
+		DefaultRoot: filepath.Join(dir, "memories"),
+		RuntimeDir:  filepath.Join(dir, "run"),
+	}
+	srv := api.New(s, loc, token)
+	t.Cleanup(func() { srv.Close() })
+
+	called := make(chan struct{})
+	srv.SetOnShutdown(func() {
+		close(called)
+	})
+
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+
+	res := do(t, ts, "POST", "/v1/shutdown", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /v1/shutdown status = %d, want 200", res.StatusCode)
+	}
+
+	select {
+	case <-called:
+	case <-time.After(2 * time.Second):
+		t.Fatal("onShutdown was not called within 2s")
+	}
+}
+
 

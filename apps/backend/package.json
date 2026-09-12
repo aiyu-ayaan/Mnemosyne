@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Go memory core, MCP server, and REST API",
   "scripts": {
-    "build": "go build -o ../../bin/ ./cmd/mnemosyne",
+    "build": "node scripts/build.cjs",
     "test": "go test ./...",
     "lint": "go vet ./...",
     "dev": "go run ./cmd/mnemosyne serve"

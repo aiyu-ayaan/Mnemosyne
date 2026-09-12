@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/aiyu-ayaan/mnemosyne/internal/channel"
+	"github.com/aiyu-ayaan/mnemosyne/internal/config"
 	"github.com/aiyu-ayaan/mnemosyne/internal/service"
 )
 
@@ -22,6 +24,53 @@ install" registers it; these subcommands inspect and override that.
 // probeTimeout is short because the daemon is on a local pipe or socket: if it
 // has not answered in this long, it is not going to.
 const probeTimeout = 3 * time.Second
+
+func stopCmd(args []string) error {
+	fs := flag.NewFlagSet("stop", flag.ContinueOnError)
+	loc, _, _, err := locate(fs, args)
+	if err != nil {
+		return err
+	}
+
+	stopped := stopChannelDaemon(loc)
+	if err := service.Stop(); err == nil {
+		stopped = true
+	}
+
+	if stopped {
+		fmt.Println("daemon stopped")
+	} else {
+		fmt.Println("daemon is not running")
+	}
+	return nil
+}
+
+func stopChannelDaemon(loc config.Locations) bool {
+	addr, err := channel.Resolve(loc.RuntimeDir, loc.Portable)
+	if err != nil {
+		return false
+	}
+	token, err := addr.ReadToken()
+	if err != nil || token == "" {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", channel.BaseURL+"/v1/shutdown", nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	res, err := addr.HTTPClient().Do(req)
+	if err != nil {
+		return false
+	}
+	res.Body.Close()
+	return true
+}
 
 func serviceCmd(args []string) error {
 	if len(args) == 0 {
@@ -41,8 +90,11 @@ func serviceCmd(args []string) error {
 		return nil
 
 	case "stop":
-		if err := service.Stop(); err != nil {
-			return err
+		loc, _, _, _ := locate(flag.NewFlagSet("service stop", flag.ContinueOnError), args[1:])
+		channelStopped := stopChannelDaemon(loc)
+		svcErr := service.Stop()
+		if !channelStopped && svcErr != nil && !errors.Is(svcErr, service.ErrNotRegistered) {
+			return svcErr
 		}
 		fmt.Println("daemon stopped — it will start again at the next logon")
 		return nil

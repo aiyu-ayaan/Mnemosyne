@@ -68,7 +68,11 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	srv := api.New(opts.Store, opts.Locations, token)
+	srv.SetOnShutdown(cancel)
 	defer srv.Close()
 
 	httpSrv := &http.Server{
@@ -77,7 +81,7 @@ func Run(ctx context.Context, opts Options) error {
 		// the client. Read timeouts still apply, so a client that opens a
 		// connection and sends nothing does not tie up a goroutine forever.
 		ReadHeaderTimeout: 10 * time.Second,
-		BaseContext:       func(net.Listener) context.Context { return ctx },
+		BaseContext:       func(net.Listener) context.Context { return runCtx },
 	}
 
 	poll := opts.Poll
@@ -85,7 +89,7 @@ func Run(ctx context.Context, opts Options) error {
 		poll = DefaultPoll
 	}
 	if poll > 0 {
-		go watch(ctx, srv, poll)
+		go watch(runCtx, srv, poll)
 	}
 
 	slog.Info("mnemosyne daemon listening",
@@ -100,7 +104,7 @@ func Run(ctx context.Context, opts Options) error {
 			return nil
 		}
 		return fmt.Errorf("serve the local channel: %w", err)
-	case <-ctx.Done():
+	case <-runCtx.Done():
 	}
 
 	shutdown, cancel := context.WithTimeout(context.Background(), shutdownGrace)

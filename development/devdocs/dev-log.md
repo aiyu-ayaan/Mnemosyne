@@ -3,6 +3,17 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 12 — Graceful daemon shutdown and Windows file lock resilience
+
+A backend rebuild during `pnpm dev` failed with `open ..\..\bin\mnemosyne.exe: The process cannot access the file because it is being used by another process.` when a previous dev session or active MCP client was running.
+
+- **Daemon shutdown route & CLI command**: Added `POST /v1/shutdown` endpoint to `internal/api` and `internal/daemon`, and a top-level `mnemosyne stop` command that cleanly shuts down the local channel daemon before stopping the Scheduled Task.
+- **Lock-resilient Go build wrapper**: Added `apps/backend/scripts/build.cjs` which safely renames any currently running `.exe` to `.old` before compiling, allowing Go to create a fresh binary even if an active agent/MCP session is holding the previous binary.
+- **Desktop predev order & dev lifecycle**: Corrected `predev` to stop the stale daemon before building (`node ../../scripts/stop.cjs && pnpm --filter @mnemosyne/backend build`). Updated Electron `main.cjs` to track the dev daemon process and cleanly shut it down on exit or SIGINT/SIGTERM rather than leaking a detached orphan process.
+- **Root stop script**: Added `scripts/stop.cjs` to cleanly shut down any running daemon and clean up lingering dev processes.
+
+**Verified with:** `go test ./...` in backend, `TestShutdownEndpoint`, `TestDaemonShutdownOverLocalChannel`, `pnpm test`, `pnpm lint`, and building while an active daemon is running.
+
 ## Stage 11 — MCP discoverability, a dev loop, and the search bug behind both
 
 Agents could not find their way around the server, and the user had to name it
