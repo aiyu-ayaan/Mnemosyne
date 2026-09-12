@@ -4,7 +4,7 @@ import ActivityBar, { type View } from "./components/ActivityBar";
 import Editor from "./components/Editor";
 import Explorer from "./components/Explorer";
 import GraphView, { GraphSidebar } from "./components/GraphView";
-import { GraphIcon } from "./components/Icons";
+import { GraphIcon, PaletteIcon, PlugIcon } from "./components/Icons";
 import McpView from "./components/McpView";
 import Panel, { type PanelTab } from "./components/Panel";
 import Prompt, { type Ask } from "./components/Prompt";
@@ -12,7 +12,8 @@ import QuickOpen from "./components/QuickOpen";
 import SearchView, { type SearchMode } from "./components/SearchView";
 import SettingsView from "./components/SettingsView";
 import StatusBar from "./components/StatusBar";
-import Tabs from "./components/Tabs";
+import Tabs, { type MainMode } from "./components/Tabs";
+import ThemeView from "./components/ThemeView";
 import { api, bridge } from "./lib/bridge";
 import { draftTab, tabFromMemory, tabKey, type OpenTab } from "./lib/tabs";
 import type { ChangeEvent, ChannelInfo, Hit, Memory, Meta, ThemeId } from "./lib/types";
@@ -33,7 +34,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>("search");
-  const [mainMode, setMainMode] = useState<"editor" | "graph">("editor");
+  const [mainMode, setMainMode] = useState<MainMode>("editor");
 
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -392,19 +393,57 @@ export default function App() {
   const dirtyCount = tabs.filter((tab) => tab.dirty).length;
 
   const onActivity = (next: View) => {
+    if (next === "mcp") {
+      setMainMode((current) => (current === "mcp" ? "editor" : "mcp"));
+      return;
+    }
+    if (next === "theme") {
+      setMainMode((current) => (current === "theme" ? "editor" : "theme"));
+      return;
+    }
+    if (next === "settings") {
+      setMainMode((current) => (current === "settings" ? "editor" : "settings"));
+      return;
+    }
     if (next === "graph") {
       setView("graph");
       setSidebarOpen(true);
       setMainMode("graph");
       return;
     }
-    // Clicking the current view collapses the sidebar, as in VS Code.
-    if (next === view && sidebarOpen) setSidebarOpen(false);
-    else {
-      setView(next);
-      setSidebarOpen(true);
+    if (next === "explorer") {
+      if (view === "explorer" && sidebarOpen && mainMode === "editor") {
+        setSidebarOpen(false);
+      } else {
+        setView("explorer");
+        setSidebarOpen(true);
+        if (mainMode !== "editor" && mainMode !== "graph") {
+          setMainMode("editor");
+        }
+      }
+      return;
+    }
+    if (next === "search") {
+      if (view === "search" && sidebarOpen) {
+        setSidebarOpen(false);
+      } else {
+        setView("search");
+        setSidebarOpen(true);
+      }
+      return;
     }
   };
+
+  const activeActivityView: View =
+    mainMode === "mcp"
+      ? "mcp"
+      : mainMode === "theme"
+        ? "theme"
+        : mainMode === "settings"
+          ? "settings"
+          : mainMode === "graph"
+            ? "graph"
+            : view;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -415,7 +454,7 @@ export default function App() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <ActivityBar active={view} sidebarOpen={sidebarOpen} onSelect={onActivity} />
+        <ActivityBar active={activeActivityView} sidebarOpen={sidebarOpen} onSelect={onActivity} />
 
         {sidebarOpen && (
           <aside className="w-64 shrink-0 overflow-hidden border-r border-line bg-shell">
@@ -424,7 +463,10 @@ export default function App() {
                 library={library}
                 activeKey={activeKey}
                 tagFilter={tagFilter}
-                onOpen={(meta) => openMemory(meta.project, meta.slug)}
+                onOpen={(meta) => {
+                  openMemory(meta.project, meta.slug);
+                  setMainMode("editor");
+                }}
                 onTagFilter={setTagFilter}
                 onNewMemory={newMemory}
                 onNewProject={newProject}
@@ -453,15 +495,6 @@ export default function App() {
                 }}
               />
             )}
-            {view === "mcp" && <McpView health={library.health} endpoint={channel?.endpoint ?? null} />}
-            {view === "settings" && (
-              <SettingsView
-                health={library.health}
-                theme={theme}
-                onTheme={setTheme}
-                onChanged={library.reload}
-              />
-            )}
           </aside>
         )}
 
@@ -474,11 +507,12 @@ export default function App() {
               setMainMode("editor");
             }}
             onClose={closeTab}
-            showingGraph={mainMode === "graph"}
-            onToggleGraph={() => setMainMode((m) => (m === "graph" ? "editor" : "graph"))}
+            mainMode={mainMode}
+            onCloseSpecial={() => setMainMode("editor")}
+            onSelectMode={(mode) => setMainMode(mode)}
           />
 
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {mainMode === "graph" ? (
               <GraphView
                 projects={library.projects}
@@ -487,6 +521,18 @@ export default function App() {
                   openMemory(project, slug);
                   setMainMode("editor");
                 }}
+              />
+            ) : mainMode === "mcp" ? (
+              <McpView health={library.health} endpoint={channel?.endpoint ?? null} />
+            ) : mainMode === "theme" ? (
+              <ThemeView theme={theme} onTheme={setTheme} />
+            ) : mainMode === "settings" ? (
+              <SettingsView
+                health={library.health}
+                theme={theme}
+                onTheme={setTheme}
+                onChanged={library.reload}
+                onOpenThemeStudio={() => setMainMode("theme")}
               />
             ) : activeTab ? (
               <Editor
@@ -510,6 +556,8 @@ export default function App() {
                   setView("graph");
                   setMainMode("graph");
                 }}
+                onOpenMcp={() => setMainMode("mcp")}
+                onOpenTheme={() => setMainMode("theme")}
               />
             )}
           </div>
@@ -541,6 +589,7 @@ export default function App() {
         theme={theme}
         onTheme={setTheme}
         onTogglePanel={() => setPanelOpen((v) => !v)}
+        onOpenThemeStudio={() => setMainMode("theme")}
       />
 
       {quickOpen && (
@@ -562,43 +611,78 @@ export default function App() {
 function Welcome({
   error,
   onOpenGraph,
+  onOpenMcp,
+  onOpenTheme,
 }: {
   error: string | null;
   onOpenGraph?: () => void;
+  onOpenMcp?: () => void;
+  onOpenTheme?: () => void;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-ink-dim">
-      <h1 className="text-xl font-medium text-ink">Mnemosyne</h1>
+    <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center text-ink-dim select-none">
+      <div className="flex flex-col items-center gap-1">
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Mnemosyne</h1>
+        <p className="text-xs text-ink-faint">Local memory server &amp; knowledge graph for AI pair programmers</p>
+      </div>
+
       {error ? (
         <p className="max-w-md text-danger">{error}</p>
       ) : (
-        <p className="max-w-md">
-          Pick a memory from the Explorer, or press{" "}
-          <kbd className="rounded border border-line px-1 font-mono text-[11px]">Ctrl+P</kbd> to go
-          straight to one.
+        <p className="max-w-md text-xs text-ink-dim">
+          Pick a memory from the Explorer on the left, or press{" "}
+          <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px] bg-shell">Ctrl+P</kbd> to quickly search memories.
         </p>
       )}
-      {onOpenGraph && (
-        <button
-          type="button"
-          onClick={onOpenGraph}
-          className="mt-2 flex items-center gap-1.5 rounded border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover transition-colors"
-        >
-          <GraphIcon className="h-4 w-4 text-tag" />
-          <span>Open Knowledge Graph</span>
-        </button>
-      )}
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left font-mono text-[11px] text-ink-faint">
+
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+        {onOpenGraph && (
+          <button
+            type="button"
+            onClick={onOpenGraph}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover hover:border-tag transition-all shadow-xs"
+          >
+            <GraphIcon className="h-3.5 w-3.5 text-tag" />
+            <span>Knowledge Graph</span>
+          </button>
+        )}
+
+        {onOpenMcp && (
+          <button
+            type="button"
+            onClick={onOpenMcp}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover hover:border-accent transition-all shadow-xs"
+          >
+            <PlugIcon className="h-3.5 w-3.5 text-accent" />
+            <span>AI &amp; MCP Integration</span>
+          </button>
+        )}
+
+        {onOpenTheme && (
+          <button
+            type="button"
+            onClick={onOpenTheme}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover hover:border-accent transition-all shadow-xs"
+          >
+            <PaletteIcon className="h-3.5 w-3.5 text-accent" />
+            <span>Theme Studio</span>
+          </button>
+        )}
+      </div>
+
+      <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-left font-mono text-[11px] text-ink-faint border-t border-line/60 pt-4">
         <dt>Ctrl+P</dt>
         <dd>go to memory</dd>
         <dt>Ctrl+Shift+F</dt>
-        <dd>search</dd>
+        <dd>search memories</dd>
         <dt>Ctrl+B</dt>
         <dd>toggle sidebar</dd>
         <dt>Ctrl+J</dt>
-        <dd>toggle panel</dd>
+        <dd>toggle bottom panel</dd>
         <dt>Ctrl+S</dt>
-        <dd>save</dd>
+        <dd>save changes</dd>
+        <dt>Ctrl+W</dt>
+        <dd>close active tab</dd>
       </dl>
     </div>
   );

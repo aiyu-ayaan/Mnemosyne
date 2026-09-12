@@ -1,12 +1,13 @@
-import { ExplorerIcon, GraphIcon, PlugIcon, SearchIcon, SettingsIcon } from "./Icons";
+import { ExplorerIcon, GraphIcon, PaletteIcon, PlugIcon, SearchIcon, SettingsIcon } from "./Icons";
 
-export type View = "explorer" | "search" | "graph" | "mcp" | "settings";
+export type View = "explorer" | "search" | "graph" | "mcp" | "theme" | "settings";
 
-const views: { id: View; label: string; hint: string; Icon: typeof ExplorerIcon }[] = [
+const views: { id: View; label: string; hint: string; Icon: (props: { className?: string }) => React.JSX.Element }[] = [
   { id: "explorer", label: "Explorer", hint: "Ctrl+Shift+E", Icon: ExplorerIcon },
   { id: "search", label: "Search", hint: "Ctrl+Shift+F", Icon: SearchIcon },
-  { id: "graph", label: "Graph", hint: "", Icon: GraphIcon },
-  { id: "mcp", label: "MCP", hint: "", Icon: PlugIcon },
+  { id: "graph", label: "Knowledge Graph", hint: "", Icon: GraphIcon },
+  { id: "mcp", label: "AI & MCP Clients", hint: "", Icon: PlugIcon },
+  { id: "theme", label: "Appearance & Themes", hint: "", Icon: (p) => <PaletteIcon className={p.className ?? "h-6 w-6"} /> },
   { id: "settings", label: "Settings", hint: "", Icon: SettingsIcon },
 ];
 
@@ -23,8 +24,8 @@ export default function ActivityBar({ active, sidebarOpen, onSelect }: Props) {
       className="flex w-12 shrink-0 flex-col items-center border-r border-line bg-shell py-1"
     >
       {views.map(({ id, label, hint, Icon }) => {
-        // Clicking the active icon collapses the sidebar, the way VS Code does.
-        const current = active === id && sidebarOpen;
+        const isContentMode = id === "mcp" || id === "theme" || id === "settings";
+        const current = isContentMode ? active === id : active === id && sidebarOpen;
         return (
           <button
             key={id}
@@ -38,7 +39,7 @@ export default function ActivityBar({ active, sidebarOpen, onSelect }: Props) {
             }`}
           >
             {current && <span className="absolute left-0 top-0 h-full w-0.5 bg-ink" />}
-            <Icon />
+            <Icon className="h-6 w-6" />
           </button>
         );
       })}

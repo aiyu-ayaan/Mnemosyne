@@ -9,9 +9,10 @@ type Props = {
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
   onChanged: () => void;
+  onOpenThemeStudio?: () => void;
 };
 
-export default function SettingsView({ health, theme, onTheme, onChanged }: Props) {
+export default function SettingsView({ health, theme, onTheme, onChanged, onOpenThemeStudio }: Props) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -48,23 +49,39 @@ export default function SettingsView({ health, theme, onTheme, onChanged }: Prop
   };
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-y-auto p-3 text-ink-dim select-none">
+    <div className="flex h-full flex-col gap-6 overflow-y-auto p-6 max-w-4xl mx-auto w-full text-ink-dim select-none">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-line pb-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink">Settings</h2>
+      <div className="flex items-center justify-between border-b border-line pb-3">
+        <div>
+          <h2 className="text-xl font-semibold text-ink">Settings & Storage</h2>
+          <p className="mt-0.5 text-xs text-ink-dim">
+            Manage your persistent memory vault, directory paths, and engine settings.
+          </p>
+        </div>
       </div>
 
       {/* Theme Section */}
       <section>
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <PaletteIcon className="h-4 w-4 text-accent" />
-          <h3 className="font-semibold text-xs text-ink">Appearance & Theme</h3>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <PaletteIcon className="h-4 w-4 text-accent" />
+            <h3 className="font-semibold text-xs text-ink">Appearance & Theme</h3>
+          </div>
+          {onOpenThemeStudio && (
+            <button
+              type="button"
+              onClick={onOpenThemeStudio}
+              className="text-xs text-accent hover:underline font-medium"
+            >
+              Open Theme Studio →
+            </button>
+          )}
         </div>
         <p className="text-[11px] text-ink-faint mb-3">
           Select a developer theme tailored for long coding sessions and knowledge work.
         </p>
 
-        <div className="grid grid-cols-1 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {THEMES.map((item) => {
             const isSelected = theme === item.id;
             return (

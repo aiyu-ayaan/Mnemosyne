@@ -10,6 +10,7 @@ type Props = {
   theme: ThemeId;
   onTheme: (theme: ThemeId) => void;
   onTogglePanel: () => void;
+  onOpenThemeStudio?: () => void;
 };
 
 export default function StatusBar({
@@ -20,6 +21,7 @@ export default function StatusBar({
   theme,
   onTheme,
   onTogglePanel,
+  onOpenThemeStudio,
 }: Props) {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const currentTheme = THEMES.find((t) => t.id === theme) || THEMES[0]!;
@@ -107,6 +109,21 @@ export default function StatusBar({
                     />
                   </button>
                 ))}
+                {onOpenThemeStudio && (
+                  <div className="mt-1 pt-1 border-t border-line">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowThemeMenu(false);
+                        onOpenThemeStudio();
+                      }}
+                      className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-[10.5px] font-medium text-accent hover:bg-hover transition-colors"
+                    >
+                      <span>Open Theme Studio</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}
