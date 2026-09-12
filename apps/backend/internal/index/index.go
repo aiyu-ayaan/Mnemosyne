@@ -24,6 +24,7 @@ type Record struct {
 	ID      string
 	Title   string
 	Tags    []string
+	Links   []string
 	Body    string
 	Created time.Time
 	Updated time.Time
@@ -79,7 +80,18 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
     body,
     tokenize = 'porter unicode61'
 );
+
+CREATE TABLE IF NOT EXISTS links (
+    source_project TEXT NOT NULL,
+    source_slug    TEXT NOT NULL,
+    target_project TEXT NOT NULL,
+    target_slug    TEXT NOT NULL,
+    UNIQUE (source_project, source_slug, target_project, target_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_project, target_slug);
+CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_project, source_slug);
 ` + vectorSchema
+
 
 
 // Open opens or creates the index at path.
@@ -163,6 +175,26 @@ func (ix *Index) Put(r Record) error {
 		return fmt.Errorf("index text for %s/%s: %w", r.Project, r.Slug, err)
 	}
 
+	if _, err := tx.Exec(`DELETE FROM links WHERE source_project = ? AND source_slug = ?`, r.Project, r.Slug); err != nil {
+		return fmt.Errorf("clear links for %s/%s: %w", r.Project, r.Slug, err)
+	}
+	for _, target := range r.Links {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		targetProj := r.Project
+		targetSlug := target
+		if p, s, ok := strings.Cut(target, "/"); ok {
+			targetProj = p
+			targetSlug = s
+		}
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO links (source_project, source_slug, target_project, target_slug) VALUES (?, ?, ?, ?)`,
+			r.Project, r.Slug, targetProj, targetSlug); err != nil {
+			return fmt.Errorf("insert link for %s/%s -> %s/%s: %w", r.Project, r.Slug, targetProj, targetSlug, err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit index write: %w", err)
 	}
@@ -190,6 +222,10 @@ func (ix *Index) Delete(project, slug string) error {
 
 	if _, err := tx.Exec(`DELETE FROM memories_fts WHERE rowid = ?`, rowid); err != nil {
 		return fmt.Errorf("delete search row for %s/%s: %w", project, slug, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM links WHERE (source_project = ? AND source_slug = ?) OR (target_project = ? AND target_slug = ?)`,
+		project, slug, project, slug); err != nil {
+		return fmt.Errorf("delete links for %s/%s: %w", project, slug, err)
 	}
 	if _, err := tx.Exec(`DELETE FROM memories WHERE rowid = ?`, rowid); err != nil {
 		return fmt.Errorf("delete %s/%s: %w", project, slug, err)
@@ -376,4 +412,121 @@ func (ix *Index) GetHit(project, slug string) (Hit, error) {
 	h.Snippet = snippet
 	return h, nil
 }
+
+// Backlinks returns all memories that link to target project/slug.
+func (ix *Index) Backlinks(project, slug string) ([]Hit, error) {
+	q := `
+		SELECT m.project, m.slug, m.id, m.title, m.tags, f.body
+		FROM links l
+		JOIN memories m ON m.project = l.source_project AND m.slug = l.source_slug
+		JOIN memories_fts f ON f.rowid = m.rowid
+		WHERE l.target_project = ? AND l.target_slug = ?`
+	rows, err := ix.db.Query(q, project, slug)
+	if err != nil {
+		return nil, fmt.Errorf("query backlinks: %w", err)
+	}
+	defer rows.Close()
+
+	var hits []Hit
+	for rows.Next() {
+		var (
+			h    Hit
+			tags string
+			body string
+		)
+		if err := rows.Scan(&h.Project, &h.Slug, &h.ID, &h.Title, &tags, &body); err != nil {
+			return nil, fmt.Errorf("scan backlink: %w", err)
+		}
+		if tags != "" {
+			h.Tags = strings.Fields(tags)
+		}
+		snippet := strings.TrimSpace(body)
+		if len(snippet) > 160 {
+			snippet = snippet[:157] + "..."
+		}
+		h.Snippet = snippet
+		hits = append(hits, h)
+	}
+	return hits, rows.Err()
+}
+
+// GraphNode is one vertex in the memory knowledge graph.
+type GraphNode struct {
+	ID      string   `json:"id"`
+	Project string   `json:"project"`
+	Slug    string   `json:"slug"`
+	Title   string   `json:"title"`
+	Tags    []string `json:"tags,omitempty"`
+}
+
+// GraphEdge is a directional link between two memories.
+type GraphEdge struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+// GraphData represents the full visual knowledge graph.
+type GraphData struct {
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
+}
+
+// Graph returns the memory graph for a project (or all projects if empty).
+func (ix *Index) Graph(project string) (GraphData, error) {
+	nodeQ := `SELECT project, slug, id, title, tags FROM memories`
+	var nodeArgs []any
+	if project != "" {
+		nodeQ += ` WHERE project = ?`
+		nodeArgs = append(nodeArgs, project)
+	}
+	rows, err := ix.db.Query(nodeQ, nodeArgs...)
+	if err != nil {
+		return GraphData{}, fmt.Errorf("query graph nodes: %w", err)
+	}
+	defer rows.Close()
+
+	nodes := make([]GraphNode, 0)
+	nodeSet := make(map[string]bool)
+	for rows.Next() {
+		var n GraphNode
+		var tags string
+		if err := rows.Scan(&n.Project, &n.Slug, &n.ID, &n.Title, &tags); err != nil {
+			return GraphData{}, fmt.Errorf("scan graph node: %w", err)
+		}
+		n.ID = n.Project + "/" + n.Slug
+		if tags != "" {
+			n.Tags = strings.Fields(tags)
+		}
+		nodes = append(nodes, n)
+		nodeSet[n.ID] = true
+	}
+
+	edgeQ := `SELECT source_project, source_slug, target_project, target_slug FROM links`
+	var edgeArgs []any
+	if project != "" {
+		edgeQ += ` WHERE source_project = ? AND target_project = ?`
+		edgeArgs = append(edgeArgs, project, project)
+	}
+	eRows, err := ix.db.Query(edgeQ, edgeArgs...)
+	if err != nil {
+		return GraphData{Nodes: nodes, Edges: []GraphEdge{}}, fmt.Errorf("query graph edges: %w", err)
+	}
+	defer eRows.Close()
+
+	edges := make([]GraphEdge, 0)
+	for eRows.Next() {
+		var sp, ss, tp, ts string
+		if err := eRows.Scan(&sp, &ss, &tp, &ts); err != nil {
+			return GraphData{Nodes: nodes, Edges: edges}, fmt.Errorf("scan graph edge: %w", err)
+		}
+		src := sp + "/" + ss
+		tgt := tp + "/" + ts
+		if nodeSet[src] && nodeSet[tgt] {
+			edges = append(edges, GraphEdge{Source: src, Target: tgt})
+		}
+	}
+
+	return GraphData{Nodes: nodes, Edges: edges}, nil
+}
+
 

@@ -168,6 +168,7 @@ func recordFrom(meta Meta, body string, modTime time.Time, size int64) index.Rec
 		ID:      meta.ID,
 		Title:   meta.Title,
 		Tags:    meta.Tags,
+		Links:   meta.Links,
 		Body:    body,
 		Created: meta.Created,
 		Updated: meta.Updated,
@@ -175,3 +176,47 @@ func recordFrom(meta Meta, body string, modTime time.Time, size int64) index.Rec
 		Size:    size,
 	}
 }
+
+// Backlinks returns memories that link to the specified target memory.
+func (s *Store) Backlinks(project, ref string) ([]Meta, error) {
+	if s.index == nil {
+		return nil, fmt.Errorf("backlinks are unavailable: the index failed to open")
+	}
+	dir, err := s.projectDir(project)
+	if err != nil {
+		return nil, err
+	}
+	slug, err := s.resolveRef(project, dir, ref)
+	if err != nil {
+		return nil, err
+	}
+	hits, err := s.index.Backlinks(project, slug)
+	if err != nil {
+		return nil, err
+	}
+	metas := make([]Meta, len(hits))
+	for i, h := range hits {
+		metas[i] = Meta{
+			Project: h.Project,
+			Slug:    h.Slug,
+			ID:      h.ID,
+			Title:   h.Title,
+			Tags:    h.Tags,
+		}
+	}
+	return metas, nil
+}
+
+// Graph returns the link network of memories across a project or globally.
+func (s *Store) Graph(project string) (index.GraphData, error) {
+	if s.index == nil {
+		return index.GraphData{}, fmt.Errorf("graph is unavailable: the index failed to open")
+	}
+	if project != "" {
+		if _, err := s.GetProject(project); err != nil {
+			return index.GraphData{}, err
+		}
+	}
+	return s.index.Graph(project)
+}
+

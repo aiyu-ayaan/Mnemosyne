@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -114,9 +115,13 @@ func (srv *Server) routes() {
 	mux.HandleFunc("GET /v1/projects/{project}/memories/{memory}", srv.getMemory)
 	mux.HandleFunc("PUT /v1/projects/{project}/memories/{memory}", srv.writeMemory)
 	mux.HandleFunc("DELETE /v1/projects/{project}/memories/{memory}", srv.deleteMemory)
+	mux.HandleFunc("GET /v1/projects/{project}/memories/{memory}/backlinks", srv.getBacklinks)
 
 	mux.HandleFunc("GET /v1/search", srv.search)
 	mux.HandleFunc("GET /v1/embeddings", srv.getEmbeddings)
+	mux.HandleFunc("GET /v1/graph", srv.getGraph)
+	mux.HandleFunc("GET /v1/codegraph/status", srv.getCodegraphStatus)
+	mux.HandleFunc("GET /v1/codegraph/query", srv.getCodegraphQuery)
 
 	mux.HandleFunc("GET /v1/settings", srv.getSettings)
 	mux.HandleFunc("PUT /v1/settings", srv.putSettings)
@@ -399,6 +404,61 @@ func (srv *Server) getEmbeddings(w http.ResponseWriter, r *http.Request) {
 		Provider:  embedder.Model(),
 		Model:     embedder.Model(),
 	})
+}
+
+// --- backlinks and graph ---
+
+func (srv *Server) getBacklinks(w http.ResponseWriter, r *http.Request) {
+	project := r.PathValue("project")
+	memory := r.PathValue("memory")
+	backlinks, err := srv.Store().Backlinks(project, memory)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"backlinks": backlinks})
+}
+
+func (srv *Server) getGraph(w http.ResponseWriter, r *http.Request) {
+	project := r.URL.Query().Get("project")
+	graph, err := srv.Store().Graph(project)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, graph)
+}
+
+// --- codegraph ---
+
+func (srv *Server) getCodegraphStatus(w http.ResponseWriter, r *http.Request) {
+	cmd := exec.CommandContext(r.Context(), "codegraph", "status")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": true, "status": string(out)})
+}
+
+func (srv *Server) getCodegraphQuery(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeError(w, http.StatusBadRequest, "missing query parameter q")
+		return
+	}
+	cmd := exec.CommandContext(r.Context(), "codegraph", "query", "-j", q)
+	out, err := cmd.Output()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "error": err.Error(), "results": []any{}})
+		return
+	}
+	var results []any
+	if err := json.Unmarshal(out, &results); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": true, "raw": string(out), "results": []any{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": true, "results": results})
 }
 
 // --- events ---

@@ -3,6 +3,34 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 9 — Graph view, backlinks, and CodeGraph integration
+
+`internal/markdown` link parsing, `internal/index` links table, `internal/store` backlinks and graph,
+MCP `read_backlinks` tool, `/v1/graph` and `/v1/codegraph/*` API routes, and Obsidian-style canvas graph in desktop app. Phase 4 complete.
+
+- `internal/markdown` extracts `[[target]]` / `[[target|alias]]` wikilinks and body `#tags`
+  (ignoring markdown `# Heading`), seamlessly merging them into `Memory.Links` and `Memory.Tags`.
+- `internal/index` schema adds `links` table indexed by `(project, source_slug)` and
+  `(project, target_slug)`. Memory writes replace outbound links; deletions clean up links.
+- `Store.Backlinks` returns all memories linking to a given slug; `Store.Graph` returns all nodes and edges
+  for a project (or across all projects).
+- MCP server exposes `read_backlinks` tool accepting `project` and `memory` (slug or ULID).
+- Daemon API serves `GET /v1/projects/{project}/memories/{memory}/backlinks`, `GET /v1/graph`,
+  `GET /v1/codegraph/status`, and `GET /v1/codegraph/query`.
+- Desktop app implements a high-performance HTML5 canvas force-directed graph view (`GraphView.tsx`)
+  and sidebar controller (`GraphSidebar`), offering Obsidian-style physics, zoom/pan/drag, degree-scaled
+  node radii, tag/project coloring, hover tooltips, click to inspect, and CodeGraph codebase symbol exploration.
+
+**Decisions taken here**
+
+- *Canvas-based force-directed simulation over bulky 3rd-party graph packages.* Provides 60fps
+  performance on high-DPI screens without introducing heavy dependencies or React 19 version
+  conflicts.
+- *Dual-view workflow.* Activity bar "Graph" button displays the interactive graph across the main area
+  while keeping a filterable overview in the sidebar, with quick toggling between editor tabs and graph view.
+- *CodeGraph integration via local CLI.* Exposes `/v1/codegraph/status` and `/v1/codegraph/query` directly,
+  allowing users to navigate codebase symbols and structure inside the same unified graph interface.
+
 ## Stage 8 — Semantic search, embeddings, and hybrid recall
 
 `internal/embed`, `internal/index` vector tables, `internal/store/recall.go`,

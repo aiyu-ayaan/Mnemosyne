@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ActivityBar, { type View } from "./components/ActivityBar";
 import Editor from "./components/Editor";
 import Explorer from "./components/Explorer";
-import GraphView from "./components/GraphView";
+import GraphView, { GraphSidebar } from "./components/GraphView";
+import { GraphIcon } from "./components/Icons";
 import McpView from "./components/McpView";
 import Panel, { type PanelTab } from "./components/Panel";
 import Prompt, { type Ask } from "./components/Prompt";
@@ -32,6 +33,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>("search");
+  const [mainMode, setMainMode] = useState<"editor" | "graph">("editor");
 
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -111,6 +113,7 @@ export default function App() {
       // refetched over the top of them.
       if (existing) {
         setActiveKey(key);
+        setMainMode("editor");
         return;
       }
       try {
@@ -120,6 +123,7 @@ export default function App() {
         );
         setTabs((prev) => [...prev, tabFromMemory(memory)]);
         setActiveKey(key);
+        setMainMode("editor");
         setSaveError(null);
       } catch (err) {
         reportError(err);
@@ -376,6 +380,12 @@ export default function App() {
   const dirtyCount = tabs.filter((tab) => tab.dirty).length;
 
   const onActivity = (next: View) => {
+    if (next === "graph") {
+      setView("graph");
+      setSidebarOpen(true);
+      setMainMode("graph");
+      return;
+    }
     // Clicking the current view collapses the sidebar, as in VS Code.
     if (next === view && sidebarOpen) setSidebarOpen(false);
     else {
@@ -421,7 +431,16 @@ export default function App() {
                 onSubmit={runSearch}
               />
             )}
-            {view === "graph" && <GraphView />}
+            {view === "graph" && (
+              <GraphSidebar
+                projects={library.projects}
+                activeProject={activeTab?.project ?? null}
+                onOpenMemory={(project, slug) => {
+                  openMemory(project, slug);
+                  setMainMode("editor");
+                }}
+              />
+            )}
             {view === "mcp" && <McpView health={library.health} endpoint={channel?.endpoint ?? null} />}
             {view === "settings" && (
               <SettingsView
@@ -435,10 +454,29 @@ export default function App() {
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <Tabs tabs={tabs} activeKey={activeKey} onSelect={setActiveKey} onClose={closeTab} />
+          <Tabs
+            tabs={tabs}
+            activeKey={activeKey}
+            onSelect={(key) => {
+              setActiveKey(key);
+              setMainMode("editor");
+            }}
+            onClose={closeTab}
+            showingGraph={mainMode === "graph"}
+            onToggleGraph={() => setMainMode((m) => (m === "graph" ? "editor" : "graph"))}
+          />
 
           <div className="min-h-0 flex-1">
-            {activeTab ? (
+            {mainMode === "graph" ? (
+              <GraphView
+                projects={library.projects}
+                activeProject={activeTab?.project ?? null}
+                onOpenMemory={(project, slug) => {
+                  openMemory(project, slug);
+                  setMainMode("editor");
+                }}
+              />
+            ) : activeTab ? (
               <Editor
                 tab={activeTab}
                 saving={saving}
@@ -450,7 +488,13 @@ export default function App() {
                 onDelete={deleteActive}
               />
             ) : (
-              <Welcome error={library.error} />
+              <Welcome
+                error={library.error}
+                onOpenGraph={() => {
+                  setView("graph");
+                  setMainMode("graph");
+                }}
+              />
             )}
           </div>
 
@@ -497,7 +541,13 @@ export default function App() {
   );
 }
 
-function Welcome({ error }: { error: string | null }) {
+function Welcome({
+  error,
+  onOpenGraph,
+}: {
+  error: string | null;
+  onOpenGraph?: () => void;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-ink-dim">
       <h1 className="text-xl font-medium text-ink">Mnemosyne</h1>
@@ -510,7 +560,17 @@ function Welcome({ error }: { error: string | null }) {
           straight to one.
         </p>
       )}
-      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left font-mono text-[11px] text-ink-faint">
+      {onOpenGraph && (
+        <button
+          type="button"
+          onClick={onOpenGraph}
+          className="mt-2 flex items-center gap-1.5 rounded border border-line bg-raised px-3 py-1.5 text-xs text-ink hover:bg-hover transition-colors"
+        >
+          <GraphIcon className="h-4 w-4 text-tag" />
+          <span>Open Knowledge Graph</span>
+        </button>
+      )}
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left font-mono text-[11px] text-ink-faint">
         <dt>Ctrl+P</dt>
         <dd>go to memory</dd>
         <dt>Ctrl+Shift+F</dt>

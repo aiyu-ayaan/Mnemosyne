@@ -108,6 +108,14 @@ type recallOut struct {
 	Results []index.Hit `json:"results"`
 }
 
+type readBacklinksIn struct {
+	Project string `json:"project" jsonschema:"slug of the project the target memory belongs to"`
+	Memory  string `json:"memory" jsonschema:"slug or id of the memory to find backlinks for"`
+}
+
+type readBacklinksOut struct {
+	Backlinks []store.Meta `json:"backlinks"`
+}
 
 // --- registration ---
 
@@ -213,6 +221,17 @@ func register(srv *mcp.Server, s *store.Store) {
 			return nil, recallOut{}, err
 		}
 		return nil, recallOut{Results: hits}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "read_backlinks",
+		Description: "Find all memories that link to a specified memory via [[wikilinks]] or frontmatter links.",
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in readBacklinksIn) (*mcp.CallToolResult, readBacklinksOut, error) {
+		metas, err := s.Backlinks(in.Project, in.Memory)
+		if err != nil {
+			return nil, readBacklinksOut{}, err
+		}
+		return nil, readBacklinksOut{Backlinks: metas}, nil
 	})
 }
 

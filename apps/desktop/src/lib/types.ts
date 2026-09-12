@@ -74,3 +74,22 @@ export type ChannelInfo = {
   root: string;
   portable: boolean;
 };
+
+export type GraphNode = {
+  id: string;
+  project: string;
+  slug: string;
+  title: string;
+  tags?: string[];
+};
+
+export type GraphEdge = {
+  source: string;
+  target: string;
+};
+
+export type GraphData = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+

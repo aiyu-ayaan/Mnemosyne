@@ -89,10 +89,10 @@ to talk to it is a process that burns memory and does nothing.
 
 ## Phase 4 — Graph view
 
-- [ ] **4.1 Link parsing** — `[[wikilinks]]` and tags become edges
-- [ ] **4.2 Backlinks** — stored in the index, exposed over API and MCP
-- [ ] **4.3 React Flow graph** — Obsidian-style, click to open
-- [ ] **4.4 CodeGraph integration** — bundle [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph)
+- [x] **4.1 Link parsing** — `[[wikilinks]]` and tags become edges
+- [x] **4.2 Backlinks** — stored in the index, exposed over API and MCP
+- [x] **4.3 React Flow graph** — Obsidian-style canvas graph, click to open
+- [x] **4.4 CodeGraph integration** — bundle [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph)
       (MIT) in the binary for codebase visualization; no separate install
 
 ---

@@ -1,18 +1,28 @@
 import type { OpenTab } from "../lib/tabs";
-import { CloseIcon } from "./Icons";
+import { CloseIcon, GraphIcon } from "./Icons";
 
 type Props = {
   tabs: OpenTab[];
   activeKey: string | null;
   onSelect: (key: string) => void;
   onClose: (key: string) => void;
+  showingGraph?: boolean;
+  onToggleGraph?: () => void;
 };
 
-export default function Tabs({ tabs, activeKey, onSelect, onClose }: Props) {
+export default function Tabs({
+  tabs,
+  activeKey,
+  onSelect,
+  onClose,
+  showingGraph = false,
+  onToggleGraph,
+}: Props) {
   if (tabs.length === 0) return null;
 
   return (
-    <div role="tablist" className="flex shrink-0 overflow-x-auto border-b border-line bg-shell">
+    <div role="tablist" className="flex shrink-0 items-center overflow-x-auto border-b border-line bg-shell">
+
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
         return (
@@ -50,6 +60,21 @@ export default function Tabs({ tabs, activeKey, onSelect, onClose }: Props) {
           </div>
         );
       })}
+      {onToggleGraph && (
+        <div className="ml-auto flex shrink-0 items-center px-2">
+          <button
+            type="button"
+            title="Toggle Knowledge Graph View"
+            onClick={onToggleGraph}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${
+              showingGraph ? "bg-hover text-ink font-semibold" : "text-ink-faint hover:text-ink"
+            }`}
+          >
+            <GraphIcon className="h-3.5 w-3.5" />
+            <span>Graph</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

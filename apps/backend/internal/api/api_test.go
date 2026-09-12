@@ -248,3 +248,49 @@ func TestEmbeddingsAndSearchMode(t *testing.T) {
 	}
 }
 
+func TestGraphAndBacklinks(t *testing.T) {
+	ts, _ := newServer(t)
+
+	// Create two connected memories
+	do(t, ts, "POST", "/v1/projects/notes/memories", `{"title":"First Note","body":"welcome to mnemosyne"}`)
+	do(t, ts, "POST", "/v1/projects/notes/memories", `{"title":"Second Note","body":"linking to [[first-note]]"}`)
+
+	// Backlinks for first-note
+	resBacklinks := do(t, ts, "GET", "/v1/projects/notes/memories/first-note/backlinks", "")
+	if resBacklinks.StatusCode != http.StatusOK {
+		t.Fatalf("GET backlinks: %s", resBacklinks.Status)
+	}
+	var bl struct {
+		Backlinks []struct {
+			Slug string `json:"slug"`
+		} `json:"backlinks"`
+	}
+	json.NewDecoder(resBacklinks.Body).Decode(&bl)
+	if len(bl.Backlinks) != 1 || bl.Backlinks[0].Slug != "second-note" {
+		t.Errorf("expected backlink from second-note, got %+v", bl.Backlinks)
+	}
+
+	// Graph
+	resGraph := do(t, ts, "GET", "/v1/graph?project=notes", "")
+	if resGraph.StatusCode != http.StatusOK {
+		t.Fatalf("GET graph: %s", resGraph.Status)
+	}
+	var graph struct {
+		Nodes []struct {
+			Slug string `json:"slug"`
+		} `json:"nodes"`
+		Edges []struct {
+			Source string `json:"source"`
+			Target string `json:"target"`
+		} `json:"edges"`
+	}
+	json.NewDecoder(resGraph.Body).Decode(&graph)
+	if len(graph.Nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(graph.Nodes))
+	}
+	if len(graph.Edges) != 1 {
+		t.Errorf("expected 1 edge, got %d", len(graph.Edges))
+	}
+}
+
+

@@ -227,3 +227,36 @@ func TestValidSlugRejectsTraversal(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractWikilinksAndBodyTags(t *testing.T) {
+	body := `# Main Heading
+
+Here is a reference to [[SQLite Database]] and another to [[Go Architecture|Go Design]].
+We also tag this with #database and #architecture.
+
+## Subheading (should not be a tag)
+
+Some more text with #react and repeated #database tag.
+`
+	links := ExtractWikilinks(body)
+	if len(links) != 2 || links[0] != "sqlite-database" || links[1] != "go-architecture" {
+		t.Errorf("unexpected links: %v", links)
+	}
+
+	tags := ExtractBodyTags(body)
+	if len(tags) != 3 || tags[0] != "database" || tags[1] != "architecture" || tags[2] != "react" {
+		t.Errorf("unexpected tags: %v", tags)
+	}
+
+	doc, err := Parse([]byte(body))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(doc.Links) != 2 || doc.Links[0] != "sqlite-database" {
+		t.Errorf("parsed doc.Links = %v", doc.Links)
+	}
+	if len(doc.Tags) != 3 || doc.Tags[0] != "database" {
+		t.Errorf("parsed doc.Tags = %v", doc.Tags)
+	}
+}
+

@@ -113,14 +113,14 @@ func TestToolsAreAdvertised(t *testing.T) {
 	for _, want := range []string{
 		"list_projects", "list_memories", "read_memory",
 		"write_memory", "delete_memory", "search_memories",
-		"recall",
+		"recall", "read_backlinks",
 	} {
 		if !got[want] {
 			t.Errorf("tool %q is not advertised", want)
 		}
 	}
-	if len(res.Tools) != 7 {
-		t.Errorf("advertised %d tools, want exactly 7: %v", len(res.Tools), got)
+	if len(res.Tools) != 8 {
+		t.Errorf("advertised %d tools, want exactly 8: %v", len(res.Tools), got)
 	}
 }
 
@@ -261,6 +261,30 @@ func TestRecallMemories(t *testing.T) {
 	}
 	if found.Results[0].Slug != "memory-architecture" {
 		t.Errorf("top hit = %q, want memory-architecture", found.Results[0].Slug)
+	}
+}
+
+func TestReadBacklinks(t *testing.T) {
+	session, _ := connect(t)
+
+	// Target memory
+	call(t, session, "write_memory", map[string]any{
+		"project": "proj", "title": "Target Document", "content": "base document\n",
+	}, nil)
+
+	// Source memory linking via wikilink
+	call(t, session, "write_memory", map[string]any{
+		"project": "proj", "title": "Source Document", "content": "referencing [[target-document]] here\n",
+	}, nil)
+
+	var found readBacklinksOut
+	call(t, session, "read_backlinks", map[string]any{"project": "proj", "memory": "target-document"}, &found)
+
+	if len(found.Backlinks) != 1 {
+		t.Fatalf("backlinks = %+v, want 1", found.Backlinks)
+	}
+	if found.Backlinks[0].Slug != "source-document" {
+		t.Errorf("expected source-document backlink, got %s", found.Backlinks[0].Slug)
 	}
 }
 

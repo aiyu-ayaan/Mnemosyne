@@ -62,28 +62,114 @@ func Parse(data []byte) (*Memory, error) {
 	}
 
 	m := &Memory{Body: body, Extra: map[string]any{}}
-	if len(front) == 0 {
-		return m, nil
-	}
+	if len(front) > 0 {
+		raw := map[string]any{}
+		if err := yaml.Unmarshal(front, &raw); err != nil {
+			return nil, fmt.Errorf("parse frontmatter: %w", err)
+		}
 
-	raw := map[string]any{}
-	if err := yaml.Unmarshal(front, &raw); err != nil {
-		return nil, fmt.Errorf("parse frontmatter: %w", err)
-	}
+		m.ID, _ = raw["id"].(string)
+		m.Title, _ = raw["title"].(string)
+		m.Tags = stringSlice(raw["tags"])
+		m.Links = stringSlice(raw["links"])
+		m.Created = parseTime(raw["created"])
+		m.Updated = parseTime(raw["updated"])
 
-	m.ID, _ = raw["id"].(string)
-	m.Title, _ = raw["title"].(string)
-	m.Tags = stringSlice(raw["tags"])
-	m.Links = stringSlice(raw["links"])
-	m.Created = parseTime(raw["created"])
-	m.Updated = parseTime(raw["updated"])
-
-	for k, v := range raw {
-		if !known[k] {
-			m.Extra[k] = v
+		for k, v := range raw {
+			if !known[k] {
+				m.Extra[k] = v
+			}
 		}
 	}
+
+	// Extract inline wikilinks [[link]] and body #tags
+	m.Links = mergeUnique(m.Links, ExtractWikilinks(m.Body))
+	m.Tags = mergeUnique(m.Tags, ExtractBodyTags(m.Body))
+
 	return m, nil
+}
+
+// ExtractWikilinks parses all [[target]] or [[target|alias]] occurrences in text.
+func ExtractWikilinks(body string) []string {
+	var links []string
+	seen := make(map[string]bool)
+	remaining := body
+	for {
+		start := strings.Index(remaining, "[[")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(remaining[start:], "]]")
+		if end < 0 {
+			break
+		}
+		inner := remaining[start+2 : start+end]
+		remaining = remaining[start+end+2:]
+
+		target := inner
+		if pipe := strings.Index(inner, "|"); pipe >= 0 {
+			target = inner[:pipe]
+		}
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		slug, err := Slugify(target)
+		if err == nil && slug != "" && !seen[slug] {
+			seen[slug] = true
+			links = append(links, slug)
+		}
+	}
+	return links
+}
+
+// ExtractBodyTags parses #tag occurrences from text, ignoring Markdown headings.
+func ExtractBodyTags(body string) []string {
+	var tags []string
+	seen := make(map[string]bool)
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") && strings.Contains(trimmed, " ") {
+			// Heading check: "# ", "## ", etc.
+			words := strings.Fields(trimmed)
+			if len(words) > 0 && strings.Trim(words[0], "#") == "" {
+				continue
+			}
+		}
+		words := strings.Fields(line)
+		for _, w := range words {
+			if strings.HasPrefix(w, "#") && len(w) > 1 {
+				tag := strings.Trim(w[1:], ",.!?:;\"'()[]{}")
+				tag = strings.ToLower(tag)
+				if ValidSlug(tag) && !seen[tag] {
+					seen[tag] = true
+					tags = append(tags, tag)
+				}
+			}
+		}
+	}
+	return tags
+}
+
+func mergeUnique(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	var out []string
+	for _, item := range a {
+		item = strings.TrimSpace(item)
+		if item != "" && !seen[item] {
+			seen[item] = true
+			out = append(out, item)
+		}
+	}
+	for _, item := range b {
+		item = strings.TrimSpace(item)
+		if item != "" && !seen[item] {
+			seen[item] = true
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // split separates the frontmatter block from the body. It returns empty
