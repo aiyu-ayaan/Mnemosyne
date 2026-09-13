@@ -28,6 +28,17 @@ sets the variable whenever it runs unpackaged, so `pnpm dev` needs nothing, and
 `predev` now stops only the dev daemon — matched by executable path, not by a
 name glob that caught the user's.
 
+**Follow-up, same stage: the MCP panel was handing out the wrong command.**
+It printed `codex mcp add mnemosyne -- <workspace exe> serve` with no
+`MNEMOSYNE_DEV`, so an agent registered from a dev window read the *installed*
+memories while the panel above it reported the dev daemon's — the same binary,
+a different library, and nothing on screen said so. The snippets now carry
+`--env MNEMOSYNE_DEV=1` (or an `env` block in the JSON configs) and register as
+`mnemosyne-dev` so a dev registration sits beside a real one instead of
+replacing it. "Run mnemosyne install now" is disabled in dev for the same
+reason it is refused in the CLI. Two hardcoded absolute paths from the author's
+machine went with it.
+
 Verified: `mnemosyne channel --json` with and without the variable returns
 different pipes, tokens and roots; both install commands refuse under it; a new
 `TestDetectDevLayout` asserts no dev path equals its installed counterpart.

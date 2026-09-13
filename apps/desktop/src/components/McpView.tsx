@@ -7,14 +7,46 @@ type Props = {
   health: Health | null;
   endpoint: string | null;
   binaryPath?: string | null;
+  /** True when this window is a development run, on its own memory root. */
+  dev?: boolean;
 };
+
+/**
+ * A development build serves a different memory root than the installed one, so
+ * an agent pointed at it without MNEMOSYNE_DEV would quietly read the wrong
+ * memories — the same binary, a different library. The name is changed too, so
+ * a dev registration can sit beside a real one instead of replacing it.
+ */
+type Target = { exe: string; dev: boolean };
+
+const serverName = (t: Target) => (t.dev ? "mnemosyne-dev" : "mnemosyne");
+
+/** The env block for a JSON client config, omitted entirely when not in dev. */
+const envBlock = (t: Target) => (t.dev ? { env: { MNEMOSYNE_DEV: "1" } } : {});
+
+/** `--env` for the CLI clients, which take it before the `--`. */
+const envFlag = (t: Target) => (t.dev ? "--env MNEMOSYNE_DEV=1 " : "");
+
+const quote = (exe: string) =>
+  exe.includes(" ") || exe.includes("\\") || exe.includes("/") ? `"${exe}"` : exe;
+
+const jsonConfig = (t: Target) =>
+  JSON.stringify(
+    {
+      mcpServers: {
+        [serverName(t)]: { command: t.exe, args: ["serve"], ...envBlock(t) },
+      },
+    },
+    null,
+    2,
+  );
 
 type ClientDef = {
   id: string;
   name: string;
   badge?: string;
   configPath?: string;
-  getCommand: (exe: string) => string;
+  getCommand: (target: Target) => string;
   note: string;
 };
 
@@ -24,90 +56,52 @@ const CLIENT_DEFS: ClientDef[] = [
     name: "AI Agents",
     badge: "Recommended",
     configPath: "mcp_config.json",
-    getCommand: (exe) =>
-      JSON.stringify(
-        {
-          mcpServers: {
-            mnemosyne: {
-              command: exe,
-              args: ["serve"],
-            },
-          },
-        },
-        null,
-        2,
-      ),
+    getCommand: jsonConfig,
     note: "Universal standard JSON configuration for AI agents and MCP tools.",
   },
   {
     id: "codex",
     name: "OpenAI Codex",
     badge: "CLI",
-    getCommand: (exe) =>
-      exe.includes(" ") || exe.includes("\\") || exe.includes("/")
-        ? `codex mcp add mnemosyne -- "${exe}" serve`
-        : `codex mcp add mnemosyne -- ${exe} serve`,
+    getCommand: (t) => `codex mcp add ${serverName(t)} ${envFlag(t)}-- ${quote(t.exe)} serve`,
     note: "Registers mnemosyne as an MCP tool for Codex sessions.",
   },
   {
     id: "claude",
     name: "Claude Code",
     badge: "CLI",
-    getCommand: (exe) =>
-      exe.includes(" ") || exe.includes("\\") || exe.includes("/")
-        ? `claude mcp add mnemosyne -- "${exe}" serve`
-        : `claude mcp add mnemosyne -- ${exe} serve`,
+    getCommand: (t) => `claude mcp add ${serverName(t)} ${envFlag(t)}-- ${quote(t.exe)} serve`,
     note: "Adds to current project. Use --scope user to configure globally across all projects.",
   },
   {
     id: "cursor",
     name: "Cursor",
     configPath: "~/.cursor/mcp.json",
-    getCommand: (exe) =>
-      JSON.stringify(
-        {
-          mcpServers: {
-            mnemosyne: {
-              command: exe,
-              args: ["serve"],
-            },
-          },
-        },
-        null,
-        2,
-      ),
+    getCommand: jsonConfig,
     note: "Add to Cursor MCP configuration (~/.cursor/mcp.json or Features > MCP in settings).",
   },
   {
     id: "json",
     name: "Any MCP Client (Generic JSON)",
-    getCommand: (exe) =>
-      JSON.stringify(
-        {
-          mcpServers: {
-            mnemosyne: {
-              command: exe,
-              args: ["serve"],
-            },
-          },
-        },
-        null,
-        2,
-      ),
+    getCommand: jsonConfig,
     note: "Universal stdio specification compatible with any standard Model Context Protocol client.",
   },
 ];
 
-export default function McpView({ health, endpoint, binaryPath }: Props) {
+export default function McpView({ health, endpoint, binaryPath, dev = false }: Props) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [useDevExe, setUseDevExe] = useState<boolean>(true);
   const [installing, setInstalling] = useState<boolean>(false);
   const [installStatus, setInstallStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const devExe = binaryPath || "D:\\VS-Code\\AI Expermients\\Mnemosyne\\bin\\mnemosyne.exe";
-  const installedExe = "C:\\Users\\ROOT\\AppData\\Local\\Programs\\Mnemosyne\\mnemosyne.exe";
-  const activeExe = useDevExe ? devExe : "mnemosyne";
+  // The path the main process actually resolved. There is no sensible fallback
+  // for it: a guessed path belongs to whoever's machine it was written on.
+  const devExe = binaryPath || "";
+  const activeExe = useDevExe && devExe ? devExe : "mnemosyne";
+  // Only the workspace binary is a development one. "mnemosyne" on PATH is the
+  // installed copy and serves the installed memories whatever this window is.
+  const target: Target = { exe: activeExe, dev: dev && useDevExe && Boolean(devExe) };
 
   const copy = async (key: string, value: string) => {
     await navigator.clipboard.writeText(value);
@@ -257,12 +251,15 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
                     <button
                       type="button"
                       onClick={handleInstallNow}
-                      disabled={installing}
+                      disabled={installing || dev}
+                      title={dev ? "A development build does not install itself or start at logon" : undefined}
                       className="rounded bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink hover:opacity-95 transition-opacity disabled:opacity-50 shadow-xs"
                     >
                       {installing ? "Installing…" : "⚡ Run \"mnemosyne install\" Now"}
                     </button>
-                    <span className="text-[11px] text-ink-faint">or in terminal:</span>
+                    <span className="text-[11px] text-ink-faint">
+                      {dev ? "unavailable in development mode" : "or in terminal:"}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between rounded bg-editor px-2.5 py-1.5 border border-line">
@@ -331,16 +328,14 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-ink-faint pt-1">
-                    <span>Installed Exe:</span>
-                    <button
-                      type="button"
-                      onClick={() => copy("installed-exe", installedExe)}
-                      className="text-accent hover:underline text-[10.5px] font-mono"
-                    >
-                      Copy Installed Path
-                    </button>
-                  </div>
+                  {target.dev && (
+                    <p className="pt-1 text-[11px] text-ink-faint leading-relaxed">
+                      This build runs in development mode, so the snippets below add{" "}
+                      <code className="font-mono text-ink-dim">MNEMOSYNE_DEV=1</code> and register it as{" "}
+                      <code className="font-mono text-ink-dim">mnemosyne-dev</code> — the agent then reads the
+                      same memories this window shows, not your installed ones.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -351,7 +346,7 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
       {/* Client Configuration Cards */}
       <div className="flex flex-col gap-3.5">
         {filteredClients.map((client) => {
-          const commandText = client.getCommand(activeExe);
+          const commandText = client.getCommand(target);
 
           return (
             <section
@@ -374,7 +369,7 @@ export default function McpView({ health, endpoint, binaryPath }: Props) {
                 </div>
 
                 <span className="font-mono text-[10.5px] text-ink-faint">
-                  {useDevExe ? "Using dev binary" : "Using system PATH"}
+                  {target.dev ? "Using dev binary (dev memories)" : useDevExe ? "Using workspace binary" : "Using system PATH"}
                 </span>
               </div>
 

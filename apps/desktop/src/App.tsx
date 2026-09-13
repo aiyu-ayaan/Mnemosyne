@@ -541,6 +541,7 @@ export default function App() {
                 health={library.health}
                 endpoint={channel?.endpoint ?? null}
                 binaryPath={channel?.binaryPath ?? null}
+                dev={channel?.dev ?? false}
               />
             ) : activeTab.view === "theme" ? (
               <ThemeView theme={theme} onTheme={setTheme} />

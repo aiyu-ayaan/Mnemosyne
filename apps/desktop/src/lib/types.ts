@@ -73,6 +73,8 @@ export type ChannelInfo = {
   endpoint: string;
   root: string;
   portable: boolean;
+  /** A development run: its own memory root, config, and channel. */
+  dev: boolean;
   binaryPath?: string;
 };
 
