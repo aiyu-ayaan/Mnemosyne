@@ -67,6 +67,33 @@ beside the binary.
 of what portable means, and silently doing it anyway would leave traces on a
 machine the user meant to leave clean.
 
+## Development mode
+
+A checkout must be invisible to an installed Mnemosyne. Before this existed,
+`pnpm dev` opened the *installed* memory root, fought the installed daemon for
+the same pipe, and `pnpm predev` killed the daemon the user actually relies on.
+
+`MNEMOSYNE_DEV=1` switches it. The desktop app sets it whenever it runs
+unpackaged, so `pnpm dev` needs nothing extra; a terminal sets it by hand.
+
+| | Installed | Development |
+| --- | --- | --- |
+| config file | `<user config>/mnemosyne/config.json` | `.../mnemosyne-dev/config.json` |
+| default root | `<user config>/mnemosyne/memories` | `.../mnemosyne-dev/memories` |
+| runtime dir | `<user cache>/mnemosyne` | `<user cache>/mnemosyne-dev` |
+| channel | `mnemosyne.<user>` | `mnemosyne.<user>.<hash>` |
+| `install`, `service install` | work | refused |
+| logon entry | registered | never |
+
+A sibling directory, not a subdirectory: deleting the dev data must not be able
+to take real memories with it.
+
+The two prohibitions are the point of the mode. A dev build can never put
+itself on PATH over the installed binary, and can never register itself to
+start at logon — `mnemosyne stop` in dev mode does not even touch the logon
+entry, only its own daemon. The only way to get a startup entry is to install
+the real binary deliberately.
+
 ## PATH
 
 The point of PATH is that `mnemosyne` works in any terminal, and that an MCP
@@ -142,7 +169,7 @@ to protect an invariant the storage design already holds.
 ## Commands
 
 ```
-mnemosyne install [--machine] [--no-path]      shipped
+mnemosyne install [--machine] [--no-path] [--no-autostart]   shipped
 mnemosyne uninstall [--machine]                shipped
 mnemosyne daemon                               Phase 2
 mnemosyne service status|start|stop            Phase 2

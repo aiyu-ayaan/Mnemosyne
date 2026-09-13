@@ -3,6 +3,39 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 15 — A dev build that cannot touch the installed one, and no console window
+
+Two reports, one underlying cause: the development build and the installed
+build were the same installation.
+
+**A black console window sat on the desktop.** The daemon is a console-subsystem
+binary, so the logon Scheduled Task gave it a console of its own and it stayed
+for the whole session. `Hidden` in the task XML hides the *task*, not the
+window. The fix is in the daemon rather than in each launcher: on Windows it
+calls `GetConsoleProcessList`, and frees the console when it is the only
+process attached — a console Windows created for it. Launched from a terminal
+the console is shared with the shell, the count is higher than one, and the
+logs keep printing where the developer is looking.
+
+**`pnpm dev` ran against real memories.** The checkout resolved the same config
+file, the same memory root and the same pipe as the installed copy, and
+`predev` shut the user's daemon down on every start. `MNEMOSYNE_DEV=1` now
+moves config, root, runtime directory and channel to a `mnemosyne-dev` sibling,
+and `install` and `service install` refuse outright: a dev build must never
+overwrite the installed binary, take its PATH entry, or register itself at
+logon. `stop` in dev mode leaves the logon entry alone too. The desktop app
+sets the variable whenever it runs unpackaged, so `pnpm dev` needs nothing, and
+`predev` now stops only the dev daemon — matched by executable path, not by a
+name glob that caught the user's.
+
+Verified: `mnemosyne channel --json` with and without the variable returns
+different pipes, tokens and roots; both install commands refuse under it; a new
+`TestDetectDevLayout` asserts no dev path equals its installed counterpart.
+
+New: [`debugging.md`](debugging.md) — how to debug Mnemosyne with other agents,
+which is mostly `tools`/`call` to reproduce without an agent, and a separate
+`mnemosyne-dev` MCP server name so it is always clear which build answered.
+
 ## Stage 14 — One tab strip, a command palette, and one home for the theme
 
 Two reported bugs turned out to sit on top of a structural one.
