@@ -36,9 +36,10 @@ for a local single-user tool. Do **5.3/5.4** before **5.1/5.2**.
 
 **Interrupted by, and now done:** development mode, the console window the logon
 task left on the desktop, the MCP panel handing out a registration command that
-pointed at a different memory root than the panel described, and the
-session-start hook that loads memory into every new agent conversation. Stages
-15 to 17 in the dev log. None of it changed the order above.
+pointed at a different memory root than the panel described, the
+session-start hook that loads memory into every new agent conversation, and
+first-class CLI `--dev` flag routing. Stages 15 to 21 in the dev log. None of it
+changed the order above.
 
 **Not next, on purpose.** Phase 3.5's retrieval work (reranking, entity
 matching) is blocked on **3.5.4**, an evaluation set. There is no way to tell

@@ -184,3 +184,20 @@ func TestDetectDevLayout(t *testing.T) {
 		t.Errorf("dev shares the runtime directory: %s", dev.RuntimeDir)
 	}
 }
+
+func TestDetectLayoutExplicit(t *testing.T) {
+	installed, err := DetectLayout(false, false)
+	if err != nil {
+		t.Fatalf("DetectLayout false: %v", err)
+	}
+	dev, err := DetectLayout(false, true)
+	if err != nil {
+		t.Fatalf("DetectLayout true: %v", err)
+	}
+	if !dev.Dev || !dev.Isolated() {
+		t.Fatalf("explicit dev layout not marked dev: %+v", dev)
+	}
+	if dev.ConfigPath == installed.ConfigPath {
+		t.Errorf("explicit dev shares config path: %s", dev.ConfigPath)
+	}
+}

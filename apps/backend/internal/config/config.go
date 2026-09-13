@@ -79,12 +79,16 @@ type Locations struct {
 // Detect works out the layout. forcePortable corresponds to --portable and
 // turns portable mode on even without the marker file.
 func Detect(forcePortable bool) (Locations, error) {
+	return DetectLayout(forcePortable, os.Getenv(EnvDev) == "1")
+}
+
+// DetectLayout works out the layout with explicit dev mode control.
+func DetectLayout(forcePortable, dev bool) (Locations, error) {
 	binDir, err := binaryDir()
 	if err != nil {
 		return Locations{}, err
 	}
 
-	dev := os.Getenv(EnvDev) == "1"
 	dir := appDir
 	if dev {
 		dir = devAppDir

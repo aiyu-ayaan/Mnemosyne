@@ -35,7 +35,10 @@ const envFlag = (t: Target) => (t.dev ? "--env MNEMOSYNE_DEV=1 " : "");
  * find one, and offers to create it. There is no separate create-project call
  * and nothing belongs in the repo, so the fix is to say so once, up front.
  */
-const FIRST_PROMPT = `Set up Mnemosyne for this repo. Call list_projects first; if this repository is not there, just write_memory with the project set to the repository's directory name - that creates it, there is no separate call and nothing goes in my working tree. Seed it from what this repo already documents: conventions, decisions, todo, dev-log, summarised in your own words rather than copied. Then list_memories and tell me what landed.`;
+const firstPrompt = (t: Target) =>
+  t.dev
+    ? `Set up Mnemosyne-Dev for this repo. Use the mnemosyne-dev MCP server (or mnemosyne --dev if using the CLI). Call list_projects first; if this repository is not there, just write_memory with the project set to the repository's directory name - that creates it, there is no separate call and nothing goes in my working tree. Seed it from what this repo already documents: conventions, decisions, todo, dev-log, summarised in your own words rather than copied. Then list_memories and tell me what landed.`
+    : `Set up Mnemosyne for this repo. Call list_projects first; if this repository is not there, just write_memory with the project set to the repository's directory name - that creates it, there is no separate call and nothing goes in my working tree. Seed it from what this repo already documents: conventions, decisions, todo, dev-log, summarised in your own words rather than copied. Then list_memories and tell me what landed.`;
 
 const quote = (exe: string) =>
   exe.includes(" ") || exe.includes("\\") || exe.includes("/") ? `"${exe}"` : exe;
@@ -74,7 +77,7 @@ const CLIENT_DEFS: ClientDef[] = [
     name: "OpenAI Codex",
     badge: "CLI",
     getCommand: (t) => `codex mcp add ${serverName(t)} ${envFlag(t)}-- ${quote(t.exe)} serve`,
-    note: "Registers mnemosyne as an MCP tool for Codex sessions.",
+    note: "Registers mnemosyne as an MCP tool for Codex sessions (or mnemosyne-dev in development).",
   },
   {
     id: "claude",
@@ -420,7 +423,7 @@ export default function McpView({ health, endpoint, binaryPath, dev = false }: P
           <h3 className="font-semibold text-ink text-sm">First run: say this to your agent</h3>
           <button
             type="button"
-            onClick={() => copy("first-prompt", FIRST_PROMPT)}
+            onClick={() => copy("first-prompt", firstPrompt(target))}
             className="flex items-center gap-1.5 rounded border border-line bg-raised px-2.5 py-1 text-xs font-semibold text-ink-dim hover:bg-hover hover:text-ink transition-colors shadow-xs"
           >
             {copiedKey === "first-prompt" ? (
@@ -441,7 +444,7 @@ export default function McpView({ health, endpoint, binaryPath, dev = false }: P
           it. If your agent starts looking for a Mnemosyne folder in your repo, paste this.
         </p>
         <pre className="selectable mt-3 overflow-x-auto whitespace-pre-wrap rounded-lg border border-line bg-editor p-3.5 font-mono text-[11.5px] text-ink leading-relaxed">
-          {FIRST_PROMPT}
+          {firstPrompt(target)}
         </pre>
         <p className="mt-2.5 text-xs text-ink-faint leading-relaxed">
           Clients with MCP prompt support have this built in as the <code className="font-mono text-ink-dim">setup</code> prompt,

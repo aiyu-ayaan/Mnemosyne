@@ -3,7 +3,8 @@
 Mnemosyne is a thing agents talk to, so the fastest way to debug it is to *be*
 the agent, or to point a real one at a development build and watch.
 
-Every command below assumes the development build. Set `MNEMOSYNE_DEV=1` in the
+Every command below assumes the development build. Either pass `--dev` on any
+command (e.g. `bin\mnemosyne.exe --dev doctor`), or set `MNEMOSYNE_DEV=1` in the
 shell first (PowerShell: `$env:MNEMOSYNE_DEV = "1"`), or it talks to the
 installed copy and its real memories.
 

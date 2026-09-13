@@ -48,6 +48,7 @@ Commands:
 Flags:
   --root <path>   Use this memory root for the current command
   --portable      Keep everything beside the binary and touch nothing else
+  --dev           Use development mode (its own config, memory root, and channel)
 
 The memory root is resolved in this order: --root, then $MNEMOSYNE_ROOT, then
 the config file, then the default location. Run "mnemosyne doctor" to see which
@@ -56,7 +57,7 @@ one is in effect.
 Portable mode also turns on automatically when a file named mnemosyne.portable
 sits next to the binary.
 
-Setting MNEMOSYNE_DEV=1 selects development mode: its own config file, memory
+Setting MNEMOSYNE_DEV=1 or passing --dev selects development mode: its own config file, memory
 root, runtime directory and channel, and no install or logon entry.
 `
 
@@ -70,6 +71,20 @@ func main() {
 }
 
 func run(args []string) error {
+	if len(args) == 0 {
+		fmt.Print(usage)
+		return nil
+	}
+
+	cleanArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--dev" {
+			_ = os.Setenv(config.EnvDev, "1")
+		} else {
+			cleanArgs = append(cleanArgs, arg)
+		}
+	}
+	args = cleanArgs
 	if len(args) == 0 {
 		fmt.Print(usage)
 		return nil
@@ -114,8 +129,12 @@ func run(args []string) error {
 		// "mnemosyne list-projects", "mnemosyne write_memory" — and a bare
 		// "unknown command" sends it round the help output to guess again.
 		if tool := toolNamed(command); tool != "" {
-			return fmt.Errorf("unknown command %q — %s is an MCP tool, so call it with:\n\n    mnemosyne call %s '{}'",
-				command, tool, tool)
+			devFlag := ""
+			if os.Getenv(config.EnvDev) == "1" {
+				devFlag = "--dev "
+			}
+			return fmt.Errorf("unknown command %q — %s is an MCP tool, so call it with:\n\n    mnemosyne %scall %s '{}'",
+				command, tool, devFlag, tool)
 		}
 		return fmt.Errorf("unknown command %q — run \"mnemosyne help\"", command)
 	}
@@ -138,11 +157,13 @@ func toolNamed(command string) string {
 func locate(fs *flag.FlagSet, args []string) (config.Locations, string, config.Source, error) {
 	root := fs.String("root", "", "memory root directory")
 	portable := fs.Bool("portable", false, "keep everything beside the binary")
+	dev := fs.Bool("dev", false, "use development configuration and memory root")
 	if err := fs.Parse(args); err != nil {
 		return config.Locations{}, "", "", err
 	}
 
-	loc, err := config.Detect(*portable)
+	isDev := *dev || os.Getenv(config.EnvDev) == "1"
+	loc, err := config.DetectLayout(*portable, isDev)
 	if err != nil {
 		return config.Locations{}, "", "", err
 	}

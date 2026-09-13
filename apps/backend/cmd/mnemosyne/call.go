@@ -65,7 +65,7 @@ func toolsCmd(args []string) error {
 	fs := flag.NewFlagSet("tools", flag.ContinueOnError)
 	verbose := fs.Bool("full", false, "print full descriptions and instructions")
 
-	session, done, err := connect(fs, args)
+	session, where, done, err := connectTo(fs, args)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,11 @@ func toolsCmd(args []string) error {
 		}
 	}
 
-	fmt.Printf("\nCall one with:  mnemosyne call <tool> '{\"project\":\"...\"}'\n")
+	cliPrefix := "mnemosyne"
+	if strings.Contains(where, "development") {
+		cliPrefix = "mnemosyne --dev"
+	}
+	fmt.Printf("\nCall one with:  %s call <tool> '{\"project\":\"...\"}'\n", cliPrefix)
 	return nil
 }
 

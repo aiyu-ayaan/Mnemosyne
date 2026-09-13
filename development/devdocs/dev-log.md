@@ -3,6 +3,30 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 21 — first-class CLI --dev flag and dev-aware agent onboarding prompt
+
+Even after Stage 20 printed `root: <path>` to stderr, agents like OpenAI Codex running
+shell commands in clean subshells did not have `MNEMOSYNE_DEV=1` in their environment,
+and often ignore stderr while parsing stdout JSON. The onboarding prompt copied
+from `McpView` also did not distinguish dev runs from installed ones, and `mnemosyne`
+had no `--dev` flag, so any agent attempting to invoke CLI tools defaulted to the
+installed production root in `%APPDATA%\mnemosyne` instead of the dev root in
+`%APPDATA%\mnemosyne-dev` shown by `pnpm dev`.
+
+1. **`--dev` flag on the CLI:** Available globally (`mnemosyne --dev <cmd>`) and on
+   every subcommand (`locate` parses `--dev`). It sets `MNEMOSYNE_DEV=1` and routes
+   all operations (doctor, call, tools, serve, hook) to the dev layout.
+2. **`mnemosyne tools` output:** When running under dev mode, the call hint now
+   prints `mnemosyne --dev call <tool> ...`.
+3. **MCP tool suggestions:** Unknown command suggestions now preserve `--dev`
+   (`mnemosyne --dev call list_projects '{}'`).
+4. **Dev onboarding prompt:** `McpView.tsx` now dynamically adapts `firstPrompt` when
+   in development mode, explicitly instructing the agent to use the `mnemosyne-dev`
+   MCP server or `mnemosyne --dev` CLI.
+
+Verified: `mnemosyne --dev doctor`, `mnemosyne --dev tools`, and `mnemosyne --dev call list_projects`
+reach `mnemosyne-dev\memories`; unit tests in `main_test.go` and `config_test.go` pass.
+
 ## Stage 20 — a write that goes somewhere the user is not looking
 
 An agent asked to set up the *development* root ran the bare `mnemosyne` on
