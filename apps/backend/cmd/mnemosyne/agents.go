@@ -4,64 +4,120 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/aiyu-ayaan/mnemosyne/internal/config"
+	"github.com/aiyu-ayaan/mnemosyne/internal/install"
 )
 
 const agentsUsage = `Usage: mnemosyne agents <status|install|uninstall>
 
-Wires Mnemosyne into the agents on this machine so that every new session starts
-knowing what is already remembered, without the user asking for it.
+The single entry point: one command sets Mnemosyne up in every AI agent on this
+machine, so a new session knows what is already remembered without being told.
 
 Two things reach an agent, and they are not the same:
 
-  the MCP server   every client gets Mnemosyne's instructions at connect time.
-                   "claude mcp add" / "codex mcp add" is what turns this on.
+  the MCP server   the tools themselves, plus Mnemosyne's instructions, handed
+                   to the client when it connects. Every MCP client can take
+                   this; it is what makes recall and write_memory exist at all.
   the hook         a session-start command whose output goes straight into the
-                   agent's context. This is what "agents install" writes, and it
-                   is the only one an agent cannot quietly skip.
+                   agent's context before the user's first message. Only some
+                   clients have one, and it is the half an agent cannot skip.
 
-Clients without a hook mechanism (Cursor, Windsurf, Zed) get the first only.
+"agents install" does both, for every client it finds:
 
-"agents install" edits files that belong to you — it backs each one up first,
-adds only its own entry, and "agents uninstall" takes back exactly that.
+  Claude Code   MCP + hook
+  Codex         MCP + hook
+  Cursor        MCP
+  Windsurf      MCP
+
+A client that is not installed is skipped rather than having its configuration
+invented. Anything else speaking MCP takes the JSON that "agents status" prints.
+
+These files belong to you: each is backed up before the first edit, only
+Mnemosyne's own entry is added, and "agents uninstall" takes back exactly that.
 `
+
+// serverName is what Mnemosyne registers itself as in every client.
+const serverName = "mnemosyne"
 
 // hookMatcher is when Claude Code fires SessionStart. A resumed or compacted
 // session has lost the block along with the rest of the context, so it is
 // needed there as much as at startup.
 const hookMatcher = "startup|resume|clear|compact"
 
-// agentTarget is one client's hook configuration file.
+// agentTarget is one AI client and the two places Mnemosyne reaches it.
 type agentTarget struct {
 	name string
-	// path is the config file, resolved per user.
-	path func() (string, error)
+
+	// home is the client's configuration directory. Its absence is how we know
+	// the client is not on this machine — writing config for something that is
+	// not installed leaves litter behind that nothing will ever read.
+	home func() (string, error)
+
+	// hookFile holds session-start hooks. Nil when the client has no hook
+	// mechanism, which is most of them.
+	hookFile func() (string, error)
+
+	// mcpFile is a JSON config with an "mcpServers" object.
+	mcpFile func() (string, error)
+
+	// mcpCLI is the client's own command for registering a server, used when
+	// its config is not JSON we can safely edit. Codex keeps TOML, and driving
+	// its documented CLI beats taking on a TOML writer to reach one table —
+	// the same reasoning the service package uses for schtasks and launchctl.
+	mcpCLI []string
 }
 
 func agentTargets() []agentTarget {
 	return []agentTarget{
-		{name: "Claude Code", path: claudeSettingsPath},
-		{name: "Codex", path: codexHooksPath},
+		{
+			name:     "Claude Code",
+			home:     underHome(".claude"),
+			hookFile: underHome(".claude", "settings.json"),
+			mcpFile:  underHome(".claude.json"),
+		},
+		{
+			name:     "Codex",
+			home:     underHome(".codex"),
+			hookFile: underHome(".codex", "hooks.json"),
+			mcpCLI:   []string{"codex", "mcp", "add"},
+		},
+		{
+			name:    "Cursor",
+			home:    underHome(".cursor"),
+			mcpFile: underHome(".cursor", "mcp.json"),
+		},
+		{
+			name:    "Windsurf",
+			home:    underHome(".codeium", "windsurf"),
+			mcpFile: underHome(".codeium", "windsurf", "mcp_config.json"),
+		},
 	}
 }
 
-func claudeSettingsPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+// underHome resolves a path inside the user's home directory.
+func underHome(parts ...string) func() (string, error) {
+	return func() (string, error) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(append([]string{home}, parts...)...), nil
 	}
-	return filepath.Join(home, ".claude", "settings.json"), nil
 }
 
-func codexHooksPath() (string, error) {
-	home, err := os.UserHomeDir()
+// present reports whether the client is on this machine.
+func (t agentTarget) present() bool {
+	dir, err := t.home()
 	if err != nil {
-		return "", err
+		return false
 	}
-	return filepath.Join(home, ".codex", "hooks.json"), nil
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
 }
 
 func agentsCmd(args []string) error {
@@ -85,10 +141,23 @@ func agentsCmd(args []string) error {
 	}
 }
 
-// hookCommand is the command line written into every agent's config. It is the
-// binary's absolute path rather than the bare name, because an agent launched
-// from a GUI does not always inherit the PATH a terminal has.
-func hookCommand() (string, error) {
+// binaryPathForAgents is the absolute path written into every client's config.
+//
+// Absolute rather than the bare name, because an agent launched from a GUI does
+// not always inherit the PATH a terminal has — and a client that cannot find
+// the binary reports "program not found" with nothing to act on.
+//
+// It prefers the installed copy over the running one. Running this from a
+// workspace build would otherwise point every agent on the machine at a binary
+// that `pnpm dev` rebuilds and, on Windows, locks while it does.
+func binaryPathForAgents() (string, error) {
+	if dir, err := install.Dir(install.User); err == nil {
+		candidate := filepath.Join(dir, binaryName())
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locate the running binary: %w", err)
@@ -96,43 +165,152 @@ func hookCommand() (string, error) {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
+	return exe, nil
+}
+
+// binaryName is the installed executable's filename.
+func binaryName() string {
+	if runtime.GOOS == "windows" {
+		return "mnemosyne.exe"
+	}
+	return "mnemosyne"
+}
+
+// hookCommandFor is the command line a client runs at session start.
+func hookCommandFor(exe string) string {
 	// Plain quotes, not %q: a Windows path is full of backslashes, and the
 	// escaping %q adds would reach the shell as literal double backslashes.
 	if strings.ContainsAny(exe, " \t") {
-		return `"` + exe + `" hook session-start`, nil
+		return `"` + exe + `" hook session-start`
 	}
-	return exe + " hook session-start", nil
+	return exe + " hook session-start"
+}
+
+// --- the mcpServers object, which every JSON-configured client shares ---
+
+// serverEntry is Mnemosyne as one client's MCP server definition.
+func serverEntry(exe string) map[string]any {
+	return map[string]any{"type": "stdio", "command": exe, "args": []any{"serve"}}
+}
+
+// servers returns the mcpServers object, creating it only when asked, so a
+// status check never grows the document.
+func servers(doc map[string]any, create bool) map[string]any {
+	inner, ok := doc["mcpServers"].(map[string]any)
+	if ok {
+		return inner
+	}
+	if !create {
+		return nil
+	}
+	inner = map[string]any{}
+	doc["mcpServers"] = inner
+	return inner
+}
+
+// hasServer reports whether Mnemosyne is registered and pointing at exe. A
+// registration for a binary that has since moved counts as absent, so install
+// replaces it rather than leaving the client calling a path that is gone.
+func hasServer(doc map[string]any, exe string) bool {
+	root := servers(doc, false)
+	if root == nil {
+		return false
+	}
+	entry, ok := root[serverName].(map[string]any)
+	if !ok {
+		return false
+	}
+	command, _ := entry["command"].(string)
+	return command == exe
+}
+
+func addServer(doc map[string]any, exe string) {
+	servers(doc, true)[serverName] = serverEntry(exe)
+}
+
+func removeServer(doc map[string]any) bool {
+	root := servers(doc, false)
+	if root == nil {
+		return false
+	}
+	if _, ok := root[serverName]; !ok {
+		return false
+	}
+	delete(root, serverName)
+	if len(root) == 0 {
+		delete(doc, "mcpServers")
+	}
+	return true
 }
 
 func agentsStatus() error {
-	cmd, err := hookCommand()
+	exe, err := binaryPathForAgents()
 	if err != nil {
 		return err
 	}
+	cmd := hookCommandFor(exe)
+	fmt.Printf("server name   %s\n", serverName)
+	fmt.Printf("binary        %s\n", exe)
 	fmt.Printf("hook command  %s\n\n", cmd)
 
 	for _, t := range agentTargets() {
-		path, err := t.path()
-		if err != nil {
-			fmt.Printf("%-12s could not resolve its config: %v\n", t.name, err)
+		if !t.present() {
+			fmt.Printf("%-12s not installed on this machine\n", t.name)
 			continue
+		}
+		fmt.Printf("%-12s MCP %s · hook %s\n", t.name, t.mcpState(exe), t.hookState(cmd))
+	}
+
+	fmt.Printf("\nAny other MCP client takes this:\n\n%s\n", genericConfig(exe))
+	return nil
+}
+
+// mcpState describes whether the MCP server is registered, for status output.
+func (t agentTarget) mcpState(exe string) string {
+	switch {
+	case t.mcpCLI != nil:
+		registered, err := t.cliHasServer()
+		if err != nil {
+			return "unknown (" + err.Error() + ")"
+		}
+		if registered {
+			return "registered"
+		}
+		return "not registered"
+	case t.mcpFile != nil:
+		path, err := t.mcpFile()
+		if err != nil {
+			return "unknown"
 		}
 		doc, err := readJSON(path)
-		switch {
-		case err != nil:
-			fmt.Printf("%-12s unreadable (%v)\n             %s\n", t.name, err, path)
-			continue
-		case doc == nil:
-			fmt.Printf("%-12s not configured — no %s\n", t.name, path)
-			continue
+		if err != nil {
+			return "unreadable"
 		}
-		state := "not installed"
-		if hasHook(doc, cmd) {
-			state = "installed"
+		if doc != nil && hasServer(doc, exe) {
+			return "registered"
 		}
-		fmt.Printf("%-12s %s\n             %s\n", t.name, state, path)
+		return "not registered"
 	}
-	return nil
+	return "—"
+}
+
+// hookState describes whether the session-start hook is in place.
+func (t agentTarget) hookState(cmd string) string {
+	if t.hookFile == nil {
+		return "unsupported"
+	}
+	path, err := t.hookFile()
+	if err != nil {
+		return "unknown"
+	}
+	doc, err := readJSON(path)
+	if err != nil {
+		return "unreadable"
+	}
+	if doc != nil && hasHook(doc, cmd) {
+		return "installed"
+	}
+	return "not installed"
 }
 
 func agentsInstall() error {
@@ -140,81 +318,218 @@ func agentsInstall() error {
 	if err != nil {
 		return err
 	}
-	// The hook is written into user-level configuration that every session of
-	// every agent reads. A development build has no business there.
+	// This writes into user-level configuration that every session of every
+	// agent reads. A development build has no business there.
 	if err := refuseInDev(loc); err != nil {
 		return err
 	}
 
-	cmd, err := hookCommand()
+	exe, err := binaryPathForAgents()
 	if err != nil {
 		return err
 	}
+	cmd := hookCommandFor(exe)
 
-	installed := 0
+	touched := 0
 	for _, t := range agentTargets() {
-		path, err := t.path()
-		if err != nil {
-			fmt.Printf("%s: %v\n", t.name, err)
-			continue
-		}
-		doc, err := readJSON(path)
-		if err != nil {
-			fmt.Printf("%s: %s is not readable JSON (%v) — left alone\n", t.name, path, err)
-			continue
-		}
-		// A client that keeps no hook file yet gets one created; Codex has none
-		// until something writes it.
-		if doc == nil {
-			doc = map[string]any{}
-		}
-		if hasHook(doc, cmd) {
-			fmt.Printf("%-12s already installed\n", t.name)
-			installed++
+		if !t.present() {
+			fmt.Printf("%-12s not installed on this machine — skipped\n", t.name)
 			continue
 		}
 
-		addHook(doc, cmd)
-		if err := writeJSONBackedUp(path, doc); err != nil {
-			fmt.Printf("%s: %v\n", t.name, err)
-			continue
-		}
-		fmt.Printf("%-12s installed into %s\n", t.name, path)
-		installed++
+		mcp := t.installMCP(exe)
+		hook := t.installHook(cmd)
+		fmt.Printf("%-12s MCP %s · hook %s\n", t.name, mcp, hook)
+		touched++
 	}
 
-	if installed == 0 {
-		return fmt.Errorf("no agent configuration was changed")
+	if touched == 0 {
+		return fmt.Errorf("no agent was found on this machine")
 	}
-	fmt.Println("\nrestart any running agent session to pick it up")
+	fmt.Printf("\nrestart any running agent session to pick it up\n")
+	fmt.Printf("anything else speaking MCP takes this:\n\n%s\n", genericConfig(exe))
 	return nil
 }
 
+// installMCP registers the server with one client and reports what happened.
+func (t agentTarget) installMCP(exe string) string {
+	switch {
+	case t.mcpCLI != nil:
+		registered, err := t.cliHasServer()
+		if err != nil {
+			return "failed: " + err.Error()
+		}
+		if registered {
+			return "already registered"
+		}
+		args := append(append([]string{}, t.mcpCLI[1:]...), serverName, "--", exe, "serve")
+		out, err := exec.Command(t.mcpCLI[0], args...).CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("failed: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		return "registered"
+
+	case t.mcpFile != nil:
+		path, err := t.mcpFile()
+		if err != nil {
+			return "failed: " + err.Error()
+		}
+		doc, err := readJSON(path)
+		if err != nil {
+			return "left alone: not readable JSON"
+		}
+		if doc == nil {
+			doc = map[string]any{}
+		}
+		if hasServer(doc, exe) {
+			return "already registered"
+		}
+		addServer(doc, exe)
+		if err := writeJSONBackedUp(path, doc); err != nil {
+			return "failed: " + err.Error()
+		}
+		return "registered"
+	}
+	return "unsupported"
+}
+
+// installHook writes the session-start hook for one client.
+func (t agentTarget) installHook(cmd string) string {
+	if t.hookFile == nil {
+		return "unsupported"
+	}
+	path, err := t.hookFile()
+	if err != nil {
+		return "failed: " + err.Error()
+	}
+	doc, err := readJSON(path)
+	if err != nil {
+		return "left alone: not readable JSON"
+	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	if hasHook(doc, cmd) {
+		return "already installed"
+	}
+	addHook(doc, cmd)
+	if err := writeJSONBackedUp(path, doc); err != nil {
+		return "failed: " + err.Error()
+	}
+	return "installed"
+}
+
 func agentsUninstall() error {
-	cmd, err := hookCommand()
+	exe, err := binaryPathForAgents()
 	if err != nil {
 		return err
 	}
+	cmd := hookCommandFor(exe)
+
 	for _, t := range agentTargets() {
-		path, err := t.path()
-		if err != nil {
+		if !t.present() {
 			continue
 		}
-		doc, err := readJSON(path)
-		if err != nil || doc == nil {
-			continue
-		}
-		if !removeHook(doc, cmd) {
-			fmt.Printf("%-12s nothing to remove\n", t.name)
-			continue
-		}
-		if err := writeJSONBackedUp(path, doc); err != nil {
-			fmt.Printf("%s: %v\n", t.name, err)
-			continue
-		}
-		fmt.Printf("%-12s removed from %s\n", t.name, path)
+		fmt.Printf("%-12s MCP %s · hook %s\n", t.name, t.removeMCP(), t.removeHook(cmd))
 	}
 	return nil
+}
+
+func (t agentTarget) removeMCP() string {
+	switch {
+	case t.mcpCLI != nil:
+		// The same CLI that added it removes it, and "remove" is the verb every
+		// one of them uses.
+		args := append(append([]string{}, t.mcpCLI[1:len(t.mcpCLI)-1]...), "remove", serverName)
+		out, err := exec.Command(t.mcpCLI[0], args...).CombinedOutput()
+		if err != nil {
+			return "nothing to remove"
+		}
+		_ = out
+		return "removed"
+
+	case t.mcpFile != nil:
+		path, err := t.mcpFile()
+		if err != nil {
+			return "nothing to remove"
+		}
+		doc, err := readJSON(path)
+		if err != nil || doc == nil || !removeServer(doc) {
+			return "nothing to remove"
+		}
+		if err := writeJSONBackedUp(path, doc); err != nil {
+			return "failed: " + err.Error()
+		}
+		return "removed"
+	}
+	return "—"
+}
+
+func (t agentTarget) removeHook(cmd string) string {
+	if t.hookFile == nil {
+		return "unsupported"
+	}
+	path, err := t.hookFile()
+	if err != nil {
+		return "nothing to remove"
+	}
+	doc, err := readJSON(path)
+	if err != nil || doc == nil || !removeHook(doc, cmd) {
+		return "nothing to remove"
+	}
+	if err := writeJSONBackedUp(path, doc); err != nil {
+		return "failed: " + err.Error()
+	}
+	return "removed"
+}
+
+// cliHasServer asks a client's own CLI whether the server is already there.
+// A client that is not on PATH is reported as an error rather than as "no", so
+// install does not follow up by trying to add through a command that is missing.
+func (t agentTarget) cliHasServer() (bool, error) {
+	bin := t.mcpCLI[0]
+	if _, err := exec.LookPath(bin); err != nil {
+		return false, fmt.Errorf("%s is not on PATH", bin)
+	}
+	args := append(append([]string{}, t.mcpCLI[1:len(t.mcpCLI)-1]...), "list")
+	out, err := exec.Command(bin, args...).CombinedOutput()
+	if err != nil {
+		// An empty list exits non-zero in some versions. Absence is the safe
+		// reading: adding an entry that exists is refused, which install reports.
+		return false, nil
+	}
+	return listsServer(string(out)), nil
+}
+
+// listsServer finds Mnemosyne in a client's `mcp list` output.
+//
+// The name is matched as a whole first field, not as a substring: every one of
+// these lists puts the server name in the first column, and a plain
+// strings.Contains counts a "mnemosyne-dev" registration as this one — which
+// silently skips the install the user asked for.
+func listsServer(out string) bool {
+	for line := range strings.SplitSeq(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		// Some clients print "name: command", others pad a table column.
+		if strings.TrimSuffix(fields[0], ":") == serverName {
+			return true
+		}
+	}
+	return false
+}
+
+// genericConfig is the snippet for a client Mnemosyne does not know about,
+// which is every MCP client not in agentTargets.
+func genericConfig(exe string) string {
+	doc := map[string]any{"mcpServers": map[string]any{serverName: serverEntry(exe)}}
+	data, err := json.MarshalIndent(doc, "  ", "  ")
+	if err != nil {
+		return ""
+	}
+	return "  " + string(data)
 }
 
 // --- JSON surgery ---

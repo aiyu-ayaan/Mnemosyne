@@ -3,6 +3,37 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 19 — one command to set Mnemosyne up in every agent
+
+Testing with a second agent exposed the gap: `agents install` wrote the
+session-start hook and nothing else, so MCP registration was still a per-client
+manual step, and "what is the entry point" had no honest answer.
+
+It does both halves now, for Claude Code, Codex, Cursor and Windsurf. Claude
+Code, Cursor and Windsurf keep plain JSON with an `mcpServers` object, which the
+hook code already had backup-and-merge helpers for; Codex keeps TOML, so it is
+driven through `codex mcp add` — the documented interface, already installed,
+and not worth a TOML writer to reach one table. The service package shells out
+to schtasks and launchctl for exactly this reason.
+
+Three things that were not obvious:
+
+- **A client that is not installed is skipped**, decided by whether its config
+  directory exists. Writing `~/.cursor/mcp.json` on a machine without Cursor
+  leaves a file nothing will ever read.
+- **The path written is the installed binary, not the running one.** Running
+  `agents install` from a workspace build pointed every agent on this machine at
+  a binary `pnpm dev` rebuilds and locks — which is exactly what happened the
+  first time it was run for real, and had to be undone.
+- **A registration whose command no longer matches counts as absent**, so an
+  upgrade repoints it instead of leaving the client calling a path that is gone.
+
+Found by running it: `codex mcp list` output was matched with
+`strings.Contains`, so an existing `mnemosyne-dev` entry counted as `mnemosyne`
+and install skipped the client entirely. The name is matched as a whole first
+field now, with a test covering both the padded-table and `name: command` forms
+these CLIs print.
+
 ## Stage 18 — the agent writes, the window never hears
 
 Reported as "the app does not show what I just added". The cause was structural

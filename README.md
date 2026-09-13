@@ -68,12 +68,33 @@ pnpm test
 
 ## Connect it to an agent
 
+One command, every agent on the machine:
+
+```bash
+mnemosyne agents install
+```
+
+```
+Claude Code  MCP registered · hook installed
+Codex        MCP registered · hook installed
+Cursor       not installed on this machine — skipped
+Windsurf     not installed on this machine — skipped
+```
+
+It registers the MCP server *and* the session-start hook, per client, and skips
+anything not on the machine rather than inventing configuration for it.
+`mnemosyne agents status` shows what is wired; `agents uninstall` takes back
+exactly what it added. Restart a running client to pick it up.
+
+By hand, if you would rather:
+
 ```bash
 claude mcp add mnemosyne -- mnemosyne serve
 codex mcp add mnemosyne -- mnemosyne serve
 ```
 
-For any other MCP client, the command is `mnemosyne serve` over stdio.
+For any other MCP client the command is `mnemosyne serve` over stdio, and
+`agents status` prints the JSON block to paste.
 
 Then check it:
 
@@ -94,13 +115,8 @@ That is automatic once the server is registered, and it is advisory: an agent
 reads it and may still not act on it.
 
 **The session-start hook** is not advisory. Its output goes straight into the
-agent's context, before your first message:
-
-```bash
-mnemosyne agents install     # writes the hook for every agent it finds
-mnemosyne agents status      # what is wired up right now
-mnemosyne agents uninstall   # takes back exactly what install added
-```
+agent's context, before your first message. `mnemosyne agents install` writes
+it wherever a client supports one — today Claude Code and Codex.
 
 Every new conversation then opens with the project slug for that directory and
 the memories that already exist for it, in every repository, without you asking:

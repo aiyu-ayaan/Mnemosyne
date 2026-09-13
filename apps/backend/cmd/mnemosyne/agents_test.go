@@ -93,3 +93,104 @@ func TestHookReadsDoNotGrowTheDocument(t *testing.T) {
 		t.Error("a read added a hooks key")
 	}
 }
+
+// TestServerRegistrationIsIdempotentAndReversible is the mcpServers half of the
+// same promise the hook half makes: other people's servers survive, ours
+// appears once, and uninstall leaves the document as it was found.
+const otherServers = `{
+  "mcpServers": {
+    "codegraph": {"type": "stdio", "command": "codegraph", "args": ["serve", "--mcp"]}
+  },
+  "numStartups": 41
+}`
+
+func TestServerRegistrationIsIdempotentAndReversible(t *testing.T) {
+	const exe = `C:\Program Files\Mnemosyne\mnemosyne.exe`
+	doc := parse(t, otherServers)
+
+	if hasServer(doc, exe) {
+		t.Fatal("reported registered before anything was written")
+	}
+
+	addServer(doc, exe)
+	addServer(doc, exe)
+	if !hasServer(doc, exe) {
+		t.Fatal("not reported registered after addServer")
+	}
+
+	root := doc["mcpServers"].(map[string]any)
+	if len(root) != 2 {
+		t.Fatalf("mcpServers holds %d entries, want 2 (theirs + ours)", len(root))
+	}
+	if _, kept := root["codegraph"]; !kept {
+		t.Error("the other server's registration was lost")
+	}
+
+	if !removeServer(doc) {
+		t.Fatal("removeServer reported nothing to remove")
+	}
+	got, _ := json.Marshal(doc)
+	want, _ := json.Marshal(parse(t, otherServers))
+	if string(got) != string(want) {
+		t.Errorf("uninstall did not restore the document:\n got %s\nwant %s", got, want)
+	}
+}
+
+// TestServerRegistrationFollowsAMovedBinary matters on upgrade: a registration
+// pointing at a path the binary no longer occupies is worse than none, because
+// the client reports "program not found" and the user has nothing to act on.
+func TestServerRegistrationFollowsAMovedBinary(t *testing.T) {
+	doc := map[string]any{}
+	addServer(doc, "/old/path/mnemosyne")
+
+	if hasServer(doc, "/new/path/mnemosyne") {
+		t.Fatal("a registration for the old path counted as the new one")
+	}
+	addServer(doc, "/new/path/mnemosyne")
+
+	entry := doc["mcpServers"].(map[string]any)["mnemosyne"].(map[string]any)
+	if entry["command"] != "/new/path/mnemosyne" {
+		t.Errorf("command = %v, want the new path", entry["command"])
+	}
+}
+
+// TestReadsDoNotAddAnMcpServersKey is the same guard the hook side has: a
+// status check must not leave structure behind in someone's config.
+func TestReadsDoNotAddAnMcpServersKey(t *testing.T) {
+	doc := parse(t, `{"numStartups": 41}`)
+	if hasServer(doc, "whatever") {
+		t.Fatal("found a server in a document that has none")
+	}
+	if _, added := doc["mcpServers"]; added {
+		t.Error("a read added an mcpServers key")
+	}
+}
+
+// TestListsServerDoesNotMatchASuffixedName is the regression test for a real
+// false positive: a "mnemosyne-dev" registration made install believe the real
+// server was already there and skip it.
+func TestListsServerDoesNotMatchASuffixedName(t *testing.T) {
+	// codex: a padded table, name in the first column.
+	const codexOnlyDev = `Name           Command                          Args   Env
+codegraph      codegraph                        serve  -
+mnemosyne-dev  C:\repo\bin\mnemosyne.exe        serve  MNEMOSYNE_DEV=*****`
+	if listsServer(codexOnlyDev) {
+		t.Error("mnemosyne-dev counted as mnemosyne")
+	}
+
+	const codexBoth = codexOnlyDev + "\n" + `mnemosyne      C:\Programs\mnemosyne.exe        serve  -`
+	if !listsServer(codexBoth) {
+		t.Error("a real registration was not found")
+	}
+
+	// claude: "name: command - status".
+	if !listsServer(`mnemosyne: C:\Programs\mnemosyne.exe serve - Connected`) {
+		t.Error("the name: command form was not recognised")
+	}
+	if listsServer(`mnemosyne-dev: C:\repo\bin\mnemosyne.exe serve - Connected`) {
+		t.Error("mnemosyne-dev counted as mnemosyne in the name: command form")
+	}
+	if listsServer("") {
+		t.Error("an empty list reported a registration")
+	}
+}

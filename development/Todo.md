@@ -104,11 +104,15 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
         memory root, runtime directory and channel, and refuses `install`,
         `service install` and `agents install`. A dev build can never take the
         installed binary's PATH entry or register itself at logon
-  - [x] **Session-start hooks** — `mnemosyne agents install|status|uninstall`
-        writes `mnemosyne hook session-start` into Claude Code's
-        `settings.json` and Codex's `hooks.json`, so every new conversation
-        opens with the project slug and what is already stored for it. See the
-        note in "Explicitly not doing" about editing someone else's config
+  - [x] **`mnemosyne agents` — one entry point for every AI client.**
+        `install|status|uninstall` does both halves per client: registers the
+        MCP server (`~/.claude.json`, `codex mcp add`, `~/.cursor/mcp.json`,
+        Windsurf's `mcp_config.json`) and writes `mnemosyne hook session-start`
+        wherever a session-start hook exists, so a new conversation opens with
+        the project slug and what is already stored for it. Clients that are not
+        on the machine are skipped; anything else speaking MCP gets the JSON
+        `agents status` prints. See the note in "Explicitly not doing" about
+        editing someone else's config
   - Logon autostart moved to Phase 2, where the daemon it would start exists
 - [x] **1.7 Docs** — README with install, portable, MCP wiring, and the tool table
 

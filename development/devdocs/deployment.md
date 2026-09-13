@@ -106,11 +106,31 @@ message. `mnemosyne hook session-start` is that command, and it prints the
 project slug for the working directory plus the memories that already exist for
 it.
 
-| Client | Mechanism | File |
+`mnemosyne agents install` is the single entry point for both halves — the MCP
+registration and the hook — for every client on the machine.
+
+| Client | MCP registration | Hook |
 | --- | --- | --- |
-| Claude Code | `SessionStart` hook | `~/.claude/settings.json` |
-| Codex | `SessionStart` hook | `~/.codex/hooks.json` |
-| Cursor, Windsurf, Zed | none — MCP instructions only | — |
+| Claude Code | `~/.claude.json` → `mcpServers` | `~/.claude/settings.json` |
+| Codex | `codex mcp add` (its config is TOML) | `~/.codex/hooks.json` |
+| Cursor | `~/.cursor/mcp.json` | none |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | none |
+| Anything else | the JSON `agents status` prints | none |
+
+Codex is driven through its own CLI rather than by editing its TOML, for the
+same reason the service package shells out to schtasks and launchctl: the
+documented interface is already installed, and reaching one table is not worth
+taking on a TOML writer. The others keep plain JSON with an `mcpServers` object,
+which the hook code already had helpers for.
+
+A client whose configuration directory does not exist is skipped. Writing
+`~/.cursor/mcp.json` on a machine without Cursor leaves a file nothing will ever
+read.
+
+The path written is the **installed** binary, never the running one. Running
+`agents install` from a workspace build would otherwise point every agent on the
+machine at a binary that `pnpm dev` rebuilds and, on Windows, locks while it
+does.
 
 The two supported clients take the same hook shape, which is why one writer
 covers both. The matcher is `startup|resume|clear|compact`: a resumed or
