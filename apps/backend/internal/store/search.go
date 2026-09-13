@@ -29,6 +29,22 @@ func (s *Store) Search(query, project string, limit int) ([]index.Hit, error) {
 	return s.index.Search(query, project, limit)
 }
 
+// Stamps is what the index believes every memory's file looks like: size and
+// modification time, keyed "<project>/<slug>".
+//
+// It exists for a caller that has to notice a change made by *another process*
+// sharing this root — an agent's `mnemosyne serve`, or the CLI. Reconcile
+// cannot do that job: the other process indexes what it writes, so by the time
+// Reconcile looks, the stamp already matches the file and nothing appears to
+// have changed. Comparing this against a snapshot the caller took itself is
+// what makes such a write visible.
+func (s *Store) Stamps() (map[string]index.Stamp, error) {
+	if s.index == nil {
+		return map[string]index.Stamp{}, nil
+	}
+	return s.index.Stamps()
+}
+
 // Reconcile brings the index in line with what is on disk and returns the
 // number of memories added, updated, or removed.
 //

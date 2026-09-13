@@ -46,6 +46,10 @@ whether any ranking change helps without a fixture of questions and the memories
 that should answer them, and shipping ranking changes on vibes is how a search
 system gets quietly worse.
 
+Phase 3.6 is not blocked on that and can be picked up whenever a library has
+grown messy enough to want it — **3.6.2** (`supersedes` links) is the smaller
+of the two and the one that makes recall honest about corrections.
+
 ---
 
 ## Phase 1 — MVP: a working MCP memory server
@@ -191,6 +195,30 @@ retrieval signals.
       whether any of the above helps without a fixture of questions and the
       memories that should answer them. This lands before 3.5.1, not after
 
+## Phase 3.6 — Memory hygiene
+
+Two entries moved out of "explicitly not doing" once the question was put
+properly. Neither adds a data model or an inference budget: both are the
+existing "agent proposes, user decides" shape applied to memories that have
+already accumulated.
+
+- [ ] **3.6.1 A `consolidate` prompt** — user-invoked, like `review-stale`, so
+      it costs nothing per session. Recall across a project, surface the clusters
+      that overlap, and propose a merge per cluster: which memory survives, what
+      gets appended to it, what gets deleted. Nothing is written without the
+      user saying yes. `similar` on create is the same idea at write time; this
+      is it for a library that was written before `similar` existed. The
+      temptation to skip the confirmation is the whole reason this sat in
+      "not doing" — it must not be a tool an agent can call unattended
+- [ ] **3.6.2 `supersedes` links** — one frontmatter field naming what a memory
+      replaced. Recall can then say "this corrected an earlier note" instead of
+      leaving two contradictory memories at different ages, `read_backlinks`
+      walks the chain, and the graph draws it as an edge it already understands.
+      No second store, no invalidation engine, no bi-temporal query language:
+      a link, in a file the user can read
+
+---
+
 ## Phase 4 — Graph view
 
 - [x] **4.1 Link parsing** — `[[wikilinks]]` and tags become edges
@@ -264,13 +292,19 @@ Recorded so they stay decided rather than getting rediscovered every few weeks:
   feature table, not a design. Every tool is a choice an agent pays to consider
   on every call, so the surface grows sideways into resources and prompts, which
   cost nothing to ignore.
-- **LLM-driven consolidation.** Summarising or merging memories automatically
-  needs an inference budget a local tool does not have, and it silently rewrites
-  what the user wrote. `similar` on create gets most of the benefit by telling
-  the agent instead of acting behind it.
-- **A temporal knowledge graph** (Zep/Graphiti-style bi-temporal edge
-  invalidation). The right answer at conversation scale; Mnemosyne's unit is a
-  Markdown file a human edits, and `age` plus `review-stale` covers staleness
-  without a second data model.
+- **LLM-driven consolidation — resolved, see 3.6.1.** Automatic summarising or
+  merging is still refused: it needs an inference budget a local tool does not
+  have, and it silently rewrites what the user wrote. But "never automatic" is
+  not the same as "never", and the deferral was hiding that. What ships instead
+  is the same shape as every other judgement call here — the agent proposes, the
+  user decides. `similar` on create already covers the duplicate at the moment
+  it would be created; **3.6.1** covers the ones that accumulated before it.
+- **A temporal knowledge graph — resolved, see 3.6.2.** A second data model for
+  bi-temporal edge invalidation (Zep/Graphiti-style) is still refused: that is
+  the right answer at conversation scale, and Mnemosyne's unit is a Markdown file
+  a human edits. What the deferral was throwing away with it is the one part
+  that earns its keep at file scale — knowing *what a fact replaced*. `age` and
+  `review-stale` tell you a memory is old; neither tells you it was superseded,
+  or by what. **3.6.2** records that as a link, which the graph already draws.
 - **Postgres / pgvector.** The initial sketch mentioned it; SQLite covers a
   single-user desktop app completely, and one database is simpler than two.

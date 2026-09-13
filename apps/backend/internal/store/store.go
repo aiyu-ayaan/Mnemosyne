@@ -122,6 +122,16 @@ func (s *Store) publish(kind events.Kind, project, memory string) {
 	s.bus.Publish(events.Event{Kind: kind, Project: project, Memory: memory})
 }
 
+// Publish announces a change to this store's subscribers.
+//
+// It is exported for the daemon, which is the one caller that learns about a
+// change the store itself did not make and cannot infer: a write by another
+// process sharing this root. Everything the store does itself it announces
+// itself; nothing else should need this.
+func (s *Store) Publish(kind events.Kind, project, memory string) {
+	s.publish(kind, project, memory)
+}
+
 // InternalPath returns a path inside the root's .mnemosyne directory.
 func (s *Store) InternalPath(name string) string {
 	return filepath.Join(s.root, InternalDir, name)

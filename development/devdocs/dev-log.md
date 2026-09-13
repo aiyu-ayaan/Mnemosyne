@@ -3,6 +3,42 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 18 — the agent writes, the window never hears
+
+Reported as "the app does not show what I just added". The cause was structural
+and had been there since the daemon shipped.
+
+Every process sharing a memory root shares its `index.db`, and each one indexes
+what it writes. `Reconcile` decides what changed by comparing files against that
+same index — so when an agent's `mnemosyne serve` or the CLI wrote a memory, the
+stamp already matched by the time the daemon looked, nothing appeared to have
+changed, and no event was published. The renderer only reloads on events, so a
+write by an agent reached an open window exactly never. `main.cjs` claimed the
+opposite in a comment, which is how it survived this long.
+
+The daemon now keeps its own snapshot of the index and announces what moved
+under it. The subtlety is telling its own work apart from somebody else's, and
+bracketing `Reconcile` with two reads of the stamps does it: anything differing
+between `before` and `after` is Reconcile's and already has an event, anything
+else that differs from the daemon's snapshot was written elsewhere. The snapshot
+is seeded before the first tick, not on it, or the whole root announces itself
+as new; a root change from settings restarts the snapshot rather than diffing
+across the move.
+
+`Store.Stamps` and `Store.Publish` are exported for this, and both say in their
+doc comments that the daemon is the only caller that should need them.
+
+The delete half had the condition inverted and the test caught it: Reconcile
+drops a row *during* a tick, so a row it removed was still present when the tick
+began — one the other process removed was already gone by then. Skipping on the
+wrong side of that meant deletes by another process stayed silent.
+
+Verified twice: a unit test with two stores over one root, asserting both the
+write and the delete arrive, plus a quiet root that must stay silent; and by
+hand against the running dev daemon, subscribing to `/v1/events` over the pipe
+while the CLI wrote and deleted a memory — `memory.written` and
+`memory.deleted` both arrived, with no `touch` and no restart.
+
 ## Stage 17 — Memory that loads itself, in every agent, every session
 
 `instructions` reaches every MCP client, and an agent is free to ignore it. The
