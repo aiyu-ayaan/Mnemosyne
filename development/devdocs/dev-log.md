@@ -3,6 +3,37 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 16 — An entry point for agents that have never seen Mnemosyne
+
+Watching a Codex session fail at "add all the docs to Mnemosyne" showed the
+gap. It searched the working tree for a Mnemosyne folder, found nothing,
+and finished by asking to create `.mcp/` and copy files into it. Nothing in the
+tool list told it that the store lives outside the repository, or that a
+project is created by writing to it rather than by a call named for the job.
+
+Three fixes, at the three moments an agent could learn it:
+
+- **`instructions`** gained two sentences: there is no create-project call, and
+  memories are never files in the user's repository.
+- **A `setup` prompt** — the first-run entry point, in the order the calls have
+  to happen: `list_projects`, then `write_memory` to create, then seed
+  `conventions`/`decisions`/`todo`/`dev-log` from what the repo already
+  documents, then `list_memories` to confirm.
+- **The not-found error now names the way out**, which is the only one of the
+  three that arrives at the moment it bites: `project "domus": not found — a
+  project is created by its first write, not by a separate call: call
+  write_memory with project "domus" and it will exist. Existing projects: ...`
+  It fires only when the *project* is missing; a missing memory in a real
+  project gets the plain error, since that advice would be noise there.
+
+The same prompt text is now in the README and in the app's MCP panel with a copy
+button, because a user whose agent is confused needs the sentence more than the
+agent does.
+
+Verified: `list_memories` against a missing project returns the long form and
+names the existing slugs; a missing memory in a real project does not; the
+`setup` prompt is advertised and renders with the project argument.
+
 ## Stage 15 — A dev build that cannot touch the installed one, and no console window
 
 Two reports, one underlying cause: the development build and the installed

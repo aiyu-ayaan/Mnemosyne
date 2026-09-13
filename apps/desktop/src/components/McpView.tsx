@@ -27,6 +27,16 @@ const envBlock = (t: Target) => (t.dev ? { env: { MNEMOSYNE_DEV: "1" } } : {});
 /** `--env` for the CLI clients, which take it before the `--`. */
 const envFlag = (t: Target) => (t.dev ? "--env MNEMOSYNE_DEV=1 " : "");
 
+/**
+ * What to say to an agent that has never seen Mnemosyne.
+ *
+ * It exists because the failure is so consistent: an agent told to "put the
+ * docs in Mnemosyne" goes looking for a folder in the working tree, does not
+ * find one, and offers to create it. There is no separate create-project call
+ * and nothing belongs in the repo, so the fix is to say so once, up front.
+ */
+const FIRST_PROMPT = `Set up Mnemosyne for this repo. Call list_projects first; if this repository is not there, just write_memory with the project set to the repository's directory name - that creates it, there is no separate call and nothing goes in my working tree. Seed it from what this repo already documents: conventions, decisions, todo, dev-log, summarised in your own words rather than copied. Then list_memories and tell me what landed.`;
+
 const quote = (exe: string) =>
   exe.includes(" ") || exe.includes("\\") || exe.includes("/") ? `"${exe}"` : exe;
 
@@ -403,6 +413,43 @@ export default function McpView({ health, endpoint, binaryPath, dev = false }: P
           );
         })}
       </div>
+
+      {/* First run */}
+      <section className="rounded-xl border border-line bg-raised/30 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-ink text-sm">First run: say this to your agent</h3>
+          <button
+            type="button"
+            onClick={() => copy("first-prompt", FIRST_PROMPT)}
+            className="flex items-center gap-1.5 rounded border border-line bg-raised px-2.5 py-1 text-xs font-semibold text-ink-dim hover:bg-hover hover:text-ink transition-colors shadow-xs"
+          >
+            {copiedKey === "first-prompt" ? (
+              <>
+                <CheckIcon className="h-3.5 w-3.5 text-tag" />
+                <span className="text-tag">Copied</span>
+              </>
+            ) : (
+              <>
+                <CopyIcon className="h-3.5 w-3.5" />
+                <span>Copy Prompt</span>
+              </>
+            )}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-ink-faint leading-relaxed">
+          There is no &ldquo;create project&rdquo; step. A project exists as soon as a memory is written to
+          it. If your agent starts looking for a Mnemosyne folder in your repo, paste this.
+        </p>
+        <pre className="selectable mt-3 overflow-x-auto whitespace-pre-wrap rounded-lg border border-line bg-editor p-3.5 font-mono text-[11.5px] text-ink leading-relaxed">
+          {FIRST_PROMPT}
+        </pre>
+        <p className="mt-2.5 text-xs text-ink-faint leading-relaxed">
+          Clients with MCP prompt support have this built in as the <code className="font-mono text-ink-dim">setup</code> prompt,
+          alongside <code className="font-mono text-ink-dim">onboard</code>, <code className="font-mono text-ink-dim">checkpoint</code>,
+          and <code className="font-mono text-ink-dim">review-stale</code>. Claude Code lists them as
+          <code className="font-mono text-ink-dim"> /mcp__mnemosyne__setup</code>.
+        </p>
+      </section>
 
       {/* Host / Daemon Info */}
       <section className="rounded-xl border border-line bg-shell p-4 text-ink-dim">

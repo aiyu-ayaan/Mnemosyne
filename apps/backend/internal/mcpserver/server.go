@@ -5,6 +5,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -47,7 +48,13 @@ PROJECT AND MEMORY CONVENTION:
 
 A project is one codebase; use the repository directory name as its slug
 (for example "mnemosyne"). Projects are created on first write, so just use
-the slug - do not ask the user to set one up.
+the slug - do not ask the user to set one up, and do not look for a
+create-project call, there is not one.
+
+Memories are not files in the user's repository. write_memory is the only way
+in: never create a folder or a file to hold them, and never go hunting for a
+Mnemosyne directory in the working tree. There is none - the memory root is
+Mnemosyne's own, wherever the user put it.
 
 One project is not a codebase: "global" holds facts about the user that hold
 everywhere - how they like to be addressed, tools they always use, conventions
@@ -232,7 +239,7 @@ func register(srv *mcp.Server, s *store.Store) {
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in listMemoriesIn) (*mcp.CallToolResult, listMemoriesOut, error) {
 		memories, err := s.ListMemories(in.Project, in.Tag, clamp(in.Limit, defaultListLimit, maxListLimit))
 		if err != nil {
-			return nil, listMemoriesOut{}, err
+			return nil, listMemoriesOut{}, explain(s, in.Project, err)
 		}
 		return nil, listMemoriesOut{Memories: memories}, nil
 	})
@@ -247,7 +254,7 @@ func register(srv *mcp.Server, s *store.Store) {
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in readMemoryIn) (*mcp.CallToolResult, *store.Memory, error) {
 		m, err := s.ReadMemory(in.Project, in.Memory)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, explain(s, in.Project, err)
 		}
 		return nil, m, nil
 	})
@@ -322,7 +329,7 @@ func register(srv *mcp.Server, s *store.Store) {
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in deleteMemoryIn) (*mcp.CallToolResult, deleteMemoryOut, error) {
 		trashed, err := s.DeleteMemory(in.Project, in.Memory)
 		if err != nil {
-			return nil, deleteMemoryOut{}, err
+			return nil, deleteMemoryOut{}, explain(s, in.Project, err)
 		}
 		return nil, deleteMemoryOut{Project: in.Project, Memory: in.Memory, Deleted: true, Trashed: trashed}, nil
 	})
@@ -372,7 +379,7 @@ func register(srv *mcp.Server, s *store.Store) {
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in readBacklinksIn) (*mcp.CallToolResult, readBacklinksOut, error) {
 		metas, err := s.Backlinks(in.Project, in.Memory)
 		if err != nil {
-			return nil, readBacklinksOut{}, err
+			return nil, readBacklinksOut{}, explain(s, in.Project, err)
 		}
 		return nil, readBacklinksOut{Backlinks: metas}, nil
 	})
@@ -427,4 +434,35 @@ func similarTo(ctx context.Context, s *store.Store, project, title string) []ind
 		return nil
 	}
 	return hits
+}
+
+// explain turns a bare "not found" into the call the agent should make next.
+//
+// An agent that asks for a project which does not exist has usually guessed the
+// slug or assumed projects must be created before they can be used. Both are
+// recoverable in one more call, but only if the error says so — otherwise the
+// agent falls back to the filesystem and starts inventing folders, which is
+// exactly what Mnemosyne is there to avoid.
+func explain(s *store.Store, project string, err error) error {
+	if err == nil || project == "" || !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	// The project exists and it was the memory that was missing. Naming a slug
+	// the agent can see in list_memories would only mislead.
+	if _, gerr := s.GetProject(project); gerr == nil {
+		return err
+	}
+
+	known, lerr := s.ListProjects()
+	if lerr != nil || len(known) == 0 {
+		return fmt.Errorf("%w — no projects exist yet. A project is created by its first write: "+
+			"call write_memory with project %q and it will exist", err, project)
+	}
+	slugs := make([]string, 0, len(known))
+	for _, p := range known {
+		slugs = append(slugs, p.Slug)
+	}
+	return fmt.Errorf("%w — a project is created by its first write, not by a separate call: "+
+		"call write_memory with project %q and it will exist. Existing projects: %s",
+		err, project, strings.Join(slugs, ", "))
 }

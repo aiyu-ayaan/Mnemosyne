@@ -783,3 +783,68 @@ func TestWatchResourcesTracksWrites(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// TestMissingProjectErrorNamesTheWayOut is the guard on the failure that sends
+// an agent off to invent folders on disk: asking for a project that does not
+// exist has to answer with the call that creates one.
+func TestMissingProjectErrorNamesTheWayOut(t *testing.T) {
+	session, _ := connect(t, func(s *store.Store) {
+		if _, _, err := s.WriteMemory(store.WriteRequest{
+			Project: "mnemosyne", Title: "Conventions", Body: "x",
+		}); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	})
+
+	msg := callExpectingError(t, session, "list_memories", map[string]any{"project": "domus"})
+	for _, want := range []string{"write_memory", "mnemosyne"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error does not mention %q: %s", want, msg)
+		}
+	}
+
+	// A project that exists with a memory that does not is a different mistake,
+	// and pointing at write_memory there would be noise.
+	msg = callExpectingError(t, session, "read_memory", map[string]any{"project": "mnemosyne", "memory": "nope"})
+	if strings.Contains(msg, "a project is created by its first write") {
+		t.Errorf("missing memory got the missing-project advice: %s", msg)
+	}
+}
+
+// TestSetupPromptIsOffered keeps the entry point discoverable: it is the thing
+// a user picks out of their client's slash menu on day one.
+func TestSetupPromptIsOffered(t *testing.T) {
+	session, _ := connect(t)
+
+	res, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListPrompts: %v", err)
+	}
+	var found *mcp.Prompt
+	for _, p := range res.Prompts {
+		if p.Name == "setup" {
+			found = p
+		}
+	}
+	if found == nil {
+		t.Fatal("no setup prompt advertised")
+	}
+
+	got, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+		Name: "setup", Arguments: map[string]string{"project": "domus"},
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+	text := ""
+	for _, m := range got.Messages {
+		if tc, ok := m.Content.(*mcp.TextContent); ok {
+			text += tc.Text
+		}
+	}
+	for _, want := range []string{"domus", "list_projects", "write_memory", "do not create folders"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("setup prompt missing %q:\n%s", want, text)
+		}
+	}
+}

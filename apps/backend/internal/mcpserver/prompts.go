@@ -80,6 +80,40 @@ func scope(args map[string]string) string {
 
 func prompts() []prompt {
 	return []prompt{{
+		name:  "setup",
+		title: "Set up memory for this repo",
+		desc: "First run: create this repository's project and seed it from what the repo " +
+			"and this session already know.",
+		args: []*mcp.PromptArgument{projectArg(false)},
+		body: func(args map[string]string) string {
+			return fmt.Sprintf(`Set up Mnemosyne for %s. Everything below happens through the
+Mnemosyne tools — do not create folders or files anywhere on disk, and do not go
+looking for a Mnemosyne directory in this repository. There is not one: memories
+live in Mnemosyne's own root, wherever the user configured it.
+
+1. call list_projects. If a slug for this repository is already there, use it and
+   skip to step 3; it is the repository's directory name unless the list says
+   otherwise.
+2. There is no create-project call and you do not need one. A project exists as
+   soon as something is written to it, so step 3 creates it.
+3. Seed it. Read what this repository already documents about itself — its
+   README, its docs or development folder, its contributing and commit
+   conventions — and write_memory one memory per convention slug, skipping any
+   you have nothing real for:
+     - conventions  how this codebase does things: style, commits, tests, layout
+     - decisions    choices already made and why, one entry per choice
+     - todo         what is done, in progress, and planned
+     - dev-log      what actually shipped, newest first
+   Summarise in your own words. A memory that restates the README is a second
+   copy to keep in sync, not memory.
+4. call list_memories to confirm what landed, then tell me in a few lines what
+   you stored and what you deliberately left out.
+
+If this repository documents nothing yet, write the one memory that is true —
+what the project is and what it is for — and say the rest is waiting on real
+decisions rather than inventing them.`, scope(args))
+		},
+	}, {
 		name:  "checkpoint",
 		title: "Checkpoint what we learned",
 		desc: "End of session: write this conversation's durable decisions, corrections, " +

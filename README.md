@@ -70,9 +70,10 @@ pnpm test
 
 ```bash
 claude mcp add mnemosyne -- mnemosyne serve
+codex mcp add mnemosyne -- mnemosyne serve
 ```
 
-For Codex or any other MCP client, the command is `mnemosyne serve` over stdio.
+For any other MCP client, the command is `mnemosyne serve` over stdio.
 
 Then check it:
 
@@ -82,6 +83,27 @@ mnemosyne doctor
 
 which prints where your memories live, which rule chose that location, and how
 many you have.
+
+## First run: say this to your agent
+
+There is no "create project" step and nothing to set up in your repository.
+A project exists as soon as something is written to it, and `write_memory`
+does that. If your agent asks where to put files, or starts looking for a
+Mnemosyne folder in your repo, it has the wrong idea — paste this:
+
+> Set up Mnemosyne for this repo. Call `list_projects` first; if this
+> repository is not there, just `write_memory` with the project set to the
+> repository's directory name — that creates it, there is no separate call and
+> nothing goes in my working tree. Seed it from what this repo already
+> documents: `conventions`, `decisions`, `todo`, `dev-log`, summarised in your
+> own words rather than copied. Then `list_memories` and tell me what landed.
+
+Clients that support MCP prompts have that built in — it is the **setup**
+prompt, alongside **onboard** ("what do you already know about this project"),
+**checkpoint** ("write down what we learned before I close this session"), and
+**review-stale**. Claude Code lists them as `/mcp__mnemosyne__setup` and
+friends; elsewhere, look for a prompt or slash picker. If your client has no
+prompt support, the text above is the whole thing — paste it.
 
 ## Tools your agent gets
 
@@ -93,9 +115,15 @@ many you have.
 | `write_memory`    | Create or update; the project is created if it is new      |
 | `delete_memory`   | Delete permanently                                         |
 | `search_memories` | Ranked full-text search, returning snippets                |
+| `recall`          | Semantic + keyword ranking — the one to reach for first    |
+| `read_backlinks`  | What else links to a memory                                |
 
 Listing and search return metadata and snippets rather than whole memories, so
 that having a lot of them stays cheap for the agent reading them.
+
+Memories are also exposed as MCP **resources** (`mnemosyne://<project>/<slug>`),
+so you can point at one yourself with your client's `@` picker instead of
+hoping the agent goes looking.
 
 ## Where things are kept
 

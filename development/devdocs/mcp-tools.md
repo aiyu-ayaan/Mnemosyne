@@ -9,7 +9,7 @@ Three primitives, each paying for something the others cannot:
 | ------------- | ----- | --------------- | ------------------------------ |
 | **Tools**     | 8     | the agent       | a choice on every call         |
 | **Resources** | *n*   | the user        | one list on connect            |
-| **Prompts**   | 3     | the user        | nothing until picked           |
+| **Prompts**   | 4     | the user        | nothing until picked           |
 
 Eight tools. The set is deliberately small: every tool is a thing an agent has to
 read the description of and choose between, so each one has to earn its place.
@@ -68,9 +68,26 @@ asks is the order to use them in.
 
 | Prompt         | Arguments                   | For                                               |
 | -------------- | --------------------------- | ------------------------------------------------- |
+| `setup`        | `project?`                  | first run: create the project and seed it from the repo |
 | `checkpoint`   | `project?`                  | end of session: write down what is still true after it |
 | `onboard`      | `project?`                  | start of session: load and summarise what is known |
 | `review-stale` | `project?`, `older_than_days?` | verify, update, or retire memories past an age  |
+
+`setup` is the entry point, and it exists because of an observed failure rather
+than for symmetry. An agent told to "put the docs in Mnemosyne" reliably goes
+looking for a Mnemosyne folder in the working tree, does not find one, and
+offers to create it — it has no reason to assume the store lives outside the
+repo, and nothing in a tool list says so. `setup` says it once, in the order the
+calls have to happen. The same sentence is in `instructions`, and the
+not-found error says it a third time at the moment it actually bites:
+
+    project "domus": not found — a project is created by its first write, not by
+    a separate call: call write_memory with project "domus" and it will exist.
+    Existing projects: mnemosyne, global
+
+Three places for one fact is not redundancy here: instructions are read before
+the agent has a problem, the prompt is read only if the user picks it, and the
+error arrives exactly when the agent is about to do the wrong thing.
 
 ## Project convention
 
