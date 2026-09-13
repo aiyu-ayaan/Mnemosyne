@@ -34,6 +34,12 @@ root is plain Markdown in a folder the user chose, so git or Syncthing already
 covers most of the risk, and export/import matters more than at-rest encryption
 for a local single-user tool. Do **5.3/5.4** before **5.1/5.2**.
 
+**Interrupted by, and now done:** development mode, the console window the logon
+task left on the desktop, the MCP panel handing out a registration command that
+pointed at a different memory root than the panel described, and the
+session-start hook that loads memory into every new agent conversation. Stages
+15 to 17 in the dev log. None of it changed the order above.
+
 **Not next, on purpose.** Phase 3.5's retrieval work (reranking, entity
 matching) is blocked on **3.5.4**, an evaluation set. There is no way to tell
 whether any ranking change helps without a fixture of questions and the memories
@@ -73,8 +79,12 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
         or `dev-log` stops costing a `read_memory` plus the whole body back
   - [x] Resources — every memory at `mnemosyne://<project>/<slug>`, kept live
         off the change bus, so a user can `@`-mention one in their client
-  - [x] Prompts — `checkpoint`, `onboard`, `review-stale`: user-invoked, so
-        they cost nothing per session unlike `instructions`
+  - [x] Prompts — `setup`, `checkpoint`, `onboard`, `review-stale`: user-invoked,
+        so they cost nothing per session unlike `instructions`
+  - [x] An entry point for an agent that has never seen Mnemosyne — `setup`,
+        two sentences in `instructions`, and a not-found error that names the
+        write that would have worked. An agent told to "put the docs in
+        Mnemosyne" otherwise goes looking for a folder in the working tree
   - [x] `age` on every hit, and the instruction to distrust an old fact
   - [x] `similar` on create — the near-duplicates that already exist
   - [x] Delete moves to `.mnemosyne/trash/` instead of unlinking
@@ -86,6 +96,15 @@ view, vectors, encryption — makes it nicer, not functional. So it comes later.
   - [x] `mnemosyne install` / `uninstall`, per-user by default, no admin needed
   - [x] PATH registration: `HKCU\Environment` on Windows, `~/.local/bin` on
         Unix; `--machine` for the system PATH, the only path needing admin
+  - [x] Development mode — `MNEMOSYNE_DEV=1` gives a checkout its own config,
+        memory root, runtime directory and channel, and refuses `install`,
+        `service install` and `agents install`. A dev build can never take the
+        installed binary's PATH entry or register itself at logon
+  - [x] **Session-start hooks** — `mnemosyne agents install|status|uninstall`
+        writes `mnemosyne hook session-start` into Claude Code's
+        `settings.json` and Codex's `hooks.json`, so every new conversation
+        opens with the project slug and what is already stored for it. See the
+        note in "Explicitly not doing" about editing someone else's config
   - Logon autostart moved to Phase 2, where the daemon it would start exists
 - [x] **1.7 Docs** — README with install, portable, MCP wiring, and the tool table
 
@@ -107,7 +126,9 @@ to talk to it is a process that burns memory and does nothing.
 - [x] **2.3 `mnemosyne daemon`** — long-running, serves the channel, per-user
 - [x] **2.4 Logon autostart** — Scheduled Task, LaunchAgent, or `systemd --user`,
       plus `service status|start|stop|install|uninstall` from the CLI;
-      `mnemosyne install` registers it, `uninstall` removes it
+      `mnemosyne install` registers it, `uninstall` removes it. The daemon frees
+      a console it is the only process attached to, so the logon task does not
+      leave a black window on the desktop for the session
 - [x] **2.5 Change events** — `internal/events` bus, pushed over SSE at `/v1/events`
 - [x] **2.6 File watcher** — a reconcile ticker in the daemon, so an external edit
       reindexes and reaches connected clients as the same event a write would
@@ -229,6 +250,12 @@ Recorded so they stay decided rather than getting rediscovered every few weeks:
   so there is no port to firewall, collide with, or reach from the LAN.
 - **Editing shell profiles.** PATH is handled with a symlink into a directory
   already on PATH, or the Windows registry. Dotfiles belong to the user.
+  `mnemosyne agents install` is the one thing that writes into a file the user
+  owns, and it is not an exception to the rule so much as the same rule applied:
+  it is an explicit command rather than something `install` does behind them, it
+  backs the file up first, it adds only its own entry, and `agents uninstall`
+  restores the document byte for byte. Nothing is ever rewritten that does not
+  parse.
 - **Cloud sync.** The memory root is a plain folder — Dropbox, Syncthing, or git
   already solve this better than we would.
 - **A plugin system.** No second implementation of anything exists yet, so there

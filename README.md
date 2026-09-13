@@ -84,6 +84,49 @@ mnemosyne doctor
 which prints where your memories live, which rule chose that location, and how
 many you have.
 
+## Make every session load it automatically
+
+Two separate mechanisms, and it is worth knowing which is which.
+
+**The MCP server** carries Mnemosyne's instructions to every client that
+connects — Claude Code, Codex, Cursor, Windsurf, Zed, anything speaking MCP.
+That is automatic once the server is registered, and it is advisory: an agent
+reads it and may still not act on it.
+
+**The session-start hook** is not advisory. Its output goes straight into the
+agent's context, before your first message:
+
+```bash
+mnemosyne agents install     # writes the hook for every agent it finds
+mnemosyne agents status      # what is wired up right now
+mnemosyne agents uninstall   # takes back exactly what install added
+```
+
+Every new conversation then opens with the project slug for that directory and
+the memories that already exist for it, in every repository, without you asking:
+
+```
+Mnemosyne holds this user's memory across sessions and across agents, at
+C:\Users\you\AppData\Roaming\mnemosyne\memories.
+The project slug for this directory is "mnemosyne".
+
+It already holds 4:
+  conventions — Conventions
+  decisions — Decisions
+  dev-log — Dev Log
+  mcp-tooling — MCP Tooling
+...
+```
+
+It covers Claude Code (`~/.claude/settings.json`) and Codex
+(`~/.codex/hooks.json`) — the two clients with a session-start hook mechanism.
+Each file is backed up before the first edit, only Mnemosyne's own entry is
+added, and installing twice leaves one. Clients without hooks get the MCP
+instructions and the prompts below.
+
+To wire it up by hand instead, the command is `mnemosyne hook session-start`
+and its stdout is the block to inject.
+
 ## First run: say this to your agent
 
 There is no "create project" step and nothing to set up in your repository.
@@ -143,6 +186,8 @@ time and it rebuilds itself from the files on the next start.
 
 ```
 mnemosyne serve                 run the MCP server over stdio
+mnemosyne agents install        load memory into every new agent session
+mnemosyne hook session-start    the context block agents read (for hand-wiring)
 mnemosyne doctor                show the current setup
 mnemosyne root [path]           print or change the memory root
 mnemosyne install [--machine]   install and add to PATH

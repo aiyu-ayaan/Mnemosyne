@@ -3,6 +3,39 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 17 — Memory that loads itself, in every agent, every session
+
+`instructions` reaches every MCP client, and an agent is free to ignore it. The
+gap showed up as the same question twice: why does my agent not know what is
+already stored, and do I have to say something every time.
+
+`mnemosyne hook session-start` closes it. It prints the project slug for the
+working directory — the git root's name, so a session started in `apps/backend`
+belongs to the same project as one started at the top — and the memories that
+already exist for it, titles only. `mnemosyne agents install` writes that
+command into the session-start hook of every client that has one: Claude Code's
+`settings.json` and Codex's `hooks.json`, which take the same shape. Whatever
+the command prints lands in the agent's context before the user's first message.
+
+Editing a config that belongs to the user is the risky half, so the rules are
+strict and tested: additive and keyed by our own command string, backed up
+before the first edit, never rewriting a file that will not parse, reads that
+do not grow the document, and an uninstall that restores it byte for byte. The
+test seeds another tool's hooks first and asserts they survive — losing someone
+else's `SessionStart` entry would be a worse bug than not having this feature.
+
+`addHook` guards against duplicates itself rather than relying on the install
+path checking first. The test caught that: without the guard, a second install
+left two entries and the hook would run twice per session.
+
+Refused for development builds, for the same reason `install` and
+`service install` are: the hook goes into user-level config that every session
+of every agent reads.
+
+Clients without a hook mechanism — Cursor, Windsurf, Zed — still get
+`instructions` and the prompts. There is no third tier to build for them;
+the protocol does not offer one.
+
 ## Stage 16 — An entry point for agents that have never seen Mnemosyne
 
 Watching a Codex session fail at "add all the docs to Mnemosyne" showed the

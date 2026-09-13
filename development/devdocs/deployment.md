@@ -94,6 +94,46 @@ start at logon — `mnemosyne stop` in dev mode does not even touch the logon
 entry, only its own daemon. The only way to get a startup entry is to install
 the real binary deliberately.
 
+## Loading memory into every session
+
+Registering the MCP server gets Mnemosyne's `instructions` in front of every
+client that connects. That is the floor, and it is advisory — an agent reads the
+instructions and may still not call anything.
+
+`mnemosyne agents install` adds the part that is not advisory: a session-start
+hook whose stdout is injected into the agent's context before the user's first
+message. `mnemosyne hook session-start` is that command, and it prints the
+project slug for the working directory plus the memories that already exist for
+it.
+
+| Client | Mechanism | File |
+| --- | --- | --- |
+| Claude Code | `SessionStart` hook | `~/.claude/settings.json` |
+| Codex | `SessionStart` hook | `~/.codex/hooks.json` |
+| Cursor, Windsurf, Zed | none — MCP instructions only | — |
+
+The two supported clients take the same hook shape, which is why one writer
+covers both. The matcher is `startup|resume|clear|compact`: a resumed or
+compacted session has lost the block along with the rest of its context.
+
+Rules for editing someone else's config, which is what this is:
+
+- **Additive only.** The entry is keyed by our own command string. Install
+  twice, appear once; uninstall removes exactly that entry and leaves every
+  other tool's hooks alone. A test asserts the round trip is byte-identical.
+- **Back up before the first edit.** `<file>.mnemosyne.bak`, written once.
+- **Never rewrite what cannot be parsed.** A config that is not readable JSON is
+  reported and skipped, not replaced.
+- **Reads never grow the document.** Checking status on a config with no hooks
+  must not leave a `hooks` key behind.
+- **Absolute path, not the bare name.** An agent launched from a GUI does not
+  always inherit the PATH a terminal has.
+- **Refused for development builds**, like `install` and `service install`. The
+  hook lands in user-level config that every session of every agent reads.
+
+The hook must never fail a session: any error — no root, no project for this
+directory, an unreadable index — means printing nothing and exiting 0.
+
 ## PATH
 
 The point of PATH is that `mnemosyne` works in any terminal, and that an MCP
