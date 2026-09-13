@@ -21,16 +21,27 @@ import (
 // validation, annotations, and error mapping, so what they show is what the
 // agent gets.
 func connect(fs *flag.FlagSet, args []string) (*mcp.ClientSession, func(), error) {
-	s, _, _, _, err := openStore(fs, args)
+	session, _, done, err := connectTo(fs, args)
+	return session, done, err
+}
+
+// connectTo is connect plus a description of the root it opened, for a caller
+// that has to tell the user where the call landed.
+func connectTo(fs *flag.FlagSet, args []string) (*mcp.ClientSession, string, func(), error) {
+	s, loc, root, _, err := openStore(fs, args)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
+	}
+	where := root
+	if loc.Dev {
+		where += " (development build)"
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	serverSession, err := mcpserver.New(s).Connect(context.Background(), serverTransport, nil)
 	if err != nil {
 		s.Close()
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "mnemosyne-cli", Version: mcpserver.Version}, nil)
@@ -38,10 +49,10 @@ func connect(fs *flag.FlagSet, args []string) (*mcp.ClientSession, func(), error
 	if err != nil {
 		serverSession.Close()
 		s.Close()
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 
-	return session, func() {
+	return session, where, func() {
 		session.Close()
 		serverSession.Close()
 		s.Close()
@@ -143,11 +154,19 @@ func callCmd(args []string) error {
 		}
 	}
 
-	session, done, err := connect(flag.NewFlagSet("call", flag.ContinueOnError), rest)
+	session, where, done, err := connectTo(flag.NewFlagSet("call", flag.ContinueOnError), rest)
 	if err != nil {
 		return err
 	}
 	defer done()
+
+	// Which root this landed in, on stderr so stdout stays the tool's JSON.
+	//
+	// Silence here is what makes the worst mistake invisible: an agent asked to
+	// work in the development root runs the installed binary without
+	// MNEMOSYNE_DEV, the write succeeds, and nothing in the result says it went
+	// somewhere else. The user finds out by not seeing it in the app.
+	fmt.Fprintf(os.Stderr, "root: %s\n", where)
 
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: arguments})
 	if err != nil {

@@ -3,6 +3,27 @@
 Newest first. One entry per commit stage: what shipped, what it was verified
 with, and any decision worth not re-litigating later.
 
+## Stage 20 — a write that goes somewhere the user is not looking
+
+An agent asked to set up the *development* root ran the bare `mnemosyne` on
+PATH — the installed binary, no `MNEMOSYNE_DEV` — and wrote four memories into
+the installed root. Every call succeeded, every result looked right, and the
+project never appeared in the app, which was showing the dev root.
+
+Nothing was broken. Nothing said where the write went either, and that is the
+bug: the one piece of information that would have caught it in the first call
+was the one piece the CLI never printed. `mnemosyne call` now prints
+`root: <path>` to stderr, with `(development build)` when it applies. Stderr,
+not stdout, so a caller piping the tool's JSON is unaffected — and an agent
+reading its own command output now sees which library it just wrote to.
+
+The same transcript spent three calls guessing `mnemosyne list-projects`,
+`mnemosyne list_projects`, `mnemosyne write_memory` before finding
+`mnemosyne call <tool>`. An unknown command that names an MCP tool now answers
+with the call that works instead of sending the agent back to the help text.
+`mcpserver.ToolNames` is the list, with a test comparing it against what the
+server actually registers so the two cannot drift.
+
 ## Stage 19 — one command to set Mnemosyne up in every agent
 
 Testing with a second agent exposed the gap: `agents install` wrote the

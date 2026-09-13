@@ -848,3 +848,31 @@ func TestSetupPromptIsOffered(t *testing.T) {
 		}
 	}
 }
+
+// TestToolNamesMatchesWhatIsRegistered stops the CLI's copy of the tool list
+// from drifting away from the server's.
+func TestToolNamesMatchesWhatIsRegistered(t *testing.T) {
+	session, _ := connect(t)
+
+	res, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+
+	registered := map[string]bool{}
+	for _, tool := range res.Tools {
+		registered[tool.Name] = true
+	}
+	declared := map[string]bool{}
+	for _, name := range ToolNames() {
+		declared[name] = true
+		if !registered[name] {
+			t.Errorf("ToolNames lists %q, which the server does not register", name)
+		}
+	}
+	for name := range registered {
+		if !declared[name] {
+			t.Errorf("the server registers %q, which ToolNames omits", name)
+		}
+	}
+}

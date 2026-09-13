@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/aiyu-ayaan/mnemosyne/internal/config"
@@ -109,8 +110,28 @@ func run(args []string) error {
 		fmt.Print(usage)
 		return nil
 	default:
+		// An agent reaching for the CLI tries the tool name as a command first —
+		// "mnemosyne list-projects", "mnemosyne write_memory" — and a bare
+		// "unknown command" sends it round the help output to guess again.
+		if tool := toolNamed(command); tool != "" {
+			return fmt.Errorf("unknown command %q — %s is an MCP tool, so call it with:\n\n    mnemosyne call %s '{}'",
+				command, tool, tool)
+		}
 		return fmt.Errorf("unknown command %q — run \"mnemosyne help\"", command)
 	}
+}
+
+// toolNamed returns the MCP tool a mistyped command was reaching for, or "".
+// Hyphens are folded to underscores because that is the shape a CLI-minded
+// caller reaches for first: "list-projects" for "list_projects".
+func toolNamed(command string) string {
+	want := strings.ReplaceAll(strings.ToLower(command), "-", "_")
+	for _, name := range mcpserver.ToolNames() {
+		if name == want {
+			return name
+		}
+	}
+	return ""
 }
 
 // locate parses the shared flags and resolves the layout and the memory root.

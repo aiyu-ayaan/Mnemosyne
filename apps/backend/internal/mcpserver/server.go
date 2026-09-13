@@ -466,3 +466,21 @@ func explain(s *store.Store, project string, err error) error {
 		"call write_memory with project %q and it will exist. Existing projects: %s",
 		err, project, strings.Join(slugs, ", "))
 }
+
+// ToolNames is every tool this server advertises.
+//
+// It exists for the CLI, which has to recognise a tool name typed as though it
+// were a command and say where it actually lives. A test asserts this matches
+// what the server really registers, so the list cannot drift.
+func ToolNames() []string {
+	return []string{
+		"list_projects",
+		"list_memories",
+		"read_memory",
+		"write_memory",
+		"delete_memory",
+		"search_memories",
+		"recall",
+		"read_backlinks",
+	}
+}
