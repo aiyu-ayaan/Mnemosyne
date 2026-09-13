@@ -160,6 +160,10 @@ func serve(args []string) error {
 // daemonCmd runs the long-lived process the desktop app talks to. It takes
 // ownership of the store, so there is no Close here.
 func daemonCmd(args []string) error {
+	// Before anything prints: a daemon that owns a console window owns a black
+	// rectangle on the user's desktop for the rest of the session.
+	detachConsole()
+
 	s, loc, root, _, err := openStore(flag.NewFlagSet("daemon", flag.ContinueOnError), args)
 	if err != nil {
 		return err

@@ -100,7 +100,9 @@ async function ensureDaemon() {
   if (info.running) return info;
 
   const detached = app.isPackaged;
-  const child = spawn(findBinary(), ["daemon"], { detached, stdio: "ignore" });
+  // windowsHide stops the console window flashing up before the daemon frees
+  // it itself; the daemon does not need one either way.
+  const child = spawn(findBinary(), ["daemon"], { detached, stdio: "ignore", windowsHide: true });
   if (detached) {
     child.unref();
   } else {
