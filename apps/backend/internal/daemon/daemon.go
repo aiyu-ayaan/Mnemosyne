@@ -46,7 +46,7 @@ type Options struct {
 
 // Run serves until ctx is cancelled.
 func Run(ctx context.Context, opts Options) error {
-	addr, err := channel.Resolve(opts.Locations.RuntimeDir, opts.Locations.Portable)
+	addr, err := channel.Resolve(opts.Locations.RuntimeDir, opts.Locations.Isolated())
 	if err != nil {
 		return err
 	}

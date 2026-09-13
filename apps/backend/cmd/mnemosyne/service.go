@@ -33,8 +33,12 @@ func stopCmd(args []string) error {
 	}
 
 	stopped := stopChannelDaemon(loc)
-	if err := service.Stop(); err == nil {
-		stopped = true
+	// The logon entry belongs to the installed copy. A development run stops
+	// its own daemon and leaves the user's alone.
+	if !loc.Dev {
+		if err := service.Stop(); err == nil {
+			stopped = true
+		}
 	}
 
 	if stopped {
@@ -46,7 +50,7 @@ func stopCmd(args []string) error {
 }
 
 func stopChannelDaemon(loc config.Locations) bool {
-	addr, err := channel.Resolve(loc.RuntimeDir, loc.Portable)
+	addr, err := channel.Resolve(loc.RuntimeDir, loc.Isolated())
 	if err != nil {
 		return false
 	}
@@ -100,6 +104,13 @@ func serviceCmd(args []string) error {
 		return nil
 
 	case "install":
+		loc, err := config.Detect(false)
+		if err != nil {
+			return err
+		}
+		if err := refuseInDev(loc); err != nil {
+			return err
+		}
 		exe, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("locate the running binary: %w", err)
@@ -150,7 +161,7 @@ func serviceStatus(args []string) error {
 	}
 	fmt.Printf("platform says %s\n", label(state.Running, "running", "not running"))
 
-	addr, err := channel.Resolve(loc.RuntimeDir, loc.Portable)
+	addr, err := channel.Resolve(loc.RuntimeDir, loc.Isolated())
 	if err != nil {
 		return err
 	}

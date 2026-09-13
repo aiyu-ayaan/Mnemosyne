@@ -156,3 +156,31 @@ func TestSaveRoundTrip(t *testing.T) {
 		t.Errorf("Root = %q, want %q", got.Root, want)
 	}
 }
+
+// TestDetectDevLayout is the guarantee that matters for development mode: a
+// dev run must not touch any path the installed copy uses.
+func TestDetectDevLayout(t *testing.T) {
+	installed, err := Detect(false)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+
+	t.Setenv(EnvDev, "1")
+	dev, err := Detect(false)
+	if err != nil {
+		t.Fatalf("Detect dev: %v", err)
+	}
+
+	if !dev.Dev || !dev.Isolated() {
+		t.Fatalf("dev layout not marked as dev/isolated: %+v", dev)
+	}
+	if dev.ConfigPath == installed.ConfigPath {
+		t.Errorf("dev shares the config file: %s", dev.ConfigPath)
+	}
+	if dev.DefaultRoot == installed.DefaultRoot {
+		t.Errorf("dev shares the memory root: %s", dev.DefaultRoot)
+	}
+	if dev.RuntimeDir == installed.RuntimeDir {
+		t.Errorf("dev shares the runtime directory: %s", dev.RuntimeDir)
+	}
+}

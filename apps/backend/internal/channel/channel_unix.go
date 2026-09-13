@@ -15,7 +15,7 @@ const SocketFile = "daemon.sock"
 
 // endpoint is a path inside the runtime directory, which is already per-user
 // and 0700, so the socket inherits the isolation rather than declaring it.
-// portable is irrelevant here: a portable copy has its own runtime directory.
+// The flag is irrelevant here: an isolated copy has its own runtime directory.
 func endpoint(runtimeDir string, _ bool) (string, error) {
 	return filepath.Join(runtimeDir, SocketFile), nil
 }

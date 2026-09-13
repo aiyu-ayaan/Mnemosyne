@@ -17,6 +17,11 @@ const path = require("node:path");
 const DEV_URL = process.env.MNEMOSYNE_DEV_URL || "http://localhost:5173";
 const CHANNEL = "mnemosyne";
 
+// An unpackaged run is a development run. Saying so here, before any child
+// process is started, is what keeps a checkout off the installed daemon's
+// memories, config, and channel — every `mnemosyne` we spawn inherits it.
+if (!app.isPackaged) process.env.MNEMOSYNE_DEV = "1";
+
 /** How long to wait for a daemon we just spawned to answer. */
 const START_TIMEOUT_MS = 15_000;
 const START_POLL_MS = 250;

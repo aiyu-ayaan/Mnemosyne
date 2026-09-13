@@ -23,7 +23,17 @@ const EnvRoot = "MNEMOSYNE_ROOT"
 // user having to remember anything.
 const PortableMarker = "mnemosyne.portable"
 
+// EnvDev switches on development mode. A checkout must never read, write, or
+// index the memories a person actually relies on, so dev mode gets its own
+// settings file, memory root, runtime directory and channel, and refuses to
+// install itself or register anything at logon.
+const EnvDev = "MNEMOSYNE_DEV"
+
 const appDir = "mnemosyne"
+
+// devAppDir keeps every dev path a sibling of the real one rather than a
+// subdirectory of it, so deleting it cannot take real memories with it.
+const devAppDir = "mnemosyne-dev"
 
 // Config is the settings file.
 type Config struct {
@@ -46,6 +56,10 @@ const (
 type Locations struct {
 	// Portable reports whether Mnemosyne is confined to its own directory.
 	Portable bool
+
+	// Dev reports whether this is a development run, kept apart from the
+	// installed copy's data and forbidden from installing itself.
+	Dev bool
 
 	// BinDir is the directory holding the running binary.
 	BinDir string
@@ -70,6 +84,12 @@ func Detect(forcePortable bool) (Locations, error) {
 		return Locations{}, err
 	}
 
+	dev := os.Getenv(EnvDev) == "1"
+	dir := appDir
+	if dev {
+		dir = devAppDir
+	}
+
 	portable := forcePortable
 	if !portable {
 		if _, err := os.Stat(filepath.Join(binDir, PortableMarker)); err == nil {
@@ -80,6 +100,7 @@ func Detect(forcePortable bool) (Locations, error) {
 	if portable {
 		return Locations{
 			Portable:    true,
+			Dev:         dev,
 			BinDir:      binDir,
 			ConfigPath:  filepath.Join(binDir, "config.json"),
 			DefaultRoot: filepath.Join(binDir, "memories"),
@@ -90,36 +111,41 @@ func Detect(forcePortable bool) (Locations, error) {
 	// The settings file cannot live inside the memory root, because it is what
 	// says where that root is. Both sit under the user config directory, the
 	// same shape on every platform.
-	dir, err := os.UserConfigDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return Locations{}, fmt.Errorf("locate the user config directory: %w", err)
 	}
-	runtime, err := runtimeDir()
+	runtime, err := runtimeDir(dir)
 	if err != nil {
 		return Locations{}, err
 	}
 	return Locations{
+		Dev:         dev,
 		BinDir:      binDir,
-		ConfigPath:  filepath.Join(dir, appDir, "config.json"),
-		DefaultRoot: filepath.Join(dir, appDir, "memories"),
+		ConfigPath:  filepath.Join(configDir, dir, "config.json"),
+		DefaultRoot: filepath.Join(configDir, dir, "memories"),
 		RuntimeDir:  runtime,
 	}, nil
 }
+
+// Isolated reports whether this copy must not share a channel with the
+// installed daemon — true for both portable and development runs.
+func (l Locations) Isolated() bool { return l.Portable || l.Dev }
 
 // runtimeDir picks a per-user directory for the daemon's transient files.
 //
 // XDG_RUNTIME_DIR is the right answer on Linux — it is already user-private and
 // cleared at logout. Elsewhere the user cache directory is the closest
 // equivalent that exists on every platform, and is still inside the profile.
-func runtimeDir() (string, error) {
+func runtimeDir(name string) (string, error) {
 	if v := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR")); v != "" {
-		return filepath.Join(v, appDir), nil
+		return filepath.Join(v, name), nil
 	}
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("locate a runtime directory: %w", err)
 	}
-	return filepath.Join(dir, appDir), nil
+	return filepath.Join(dir, name), nil
 }
 
 // binaryDir resolves the directory of the running executable, following any

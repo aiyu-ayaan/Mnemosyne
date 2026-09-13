@@ -52,6 +52,9 @@ one is in effect.
 
 Portable mode also turns on automatically when a file named mnemosyne.portable
 sits next to the binary.
+
+Setting MNEMOSYNE_DEV=1 selects development mode: its own config file, memory
+root, runtime directory and channel, and no install or logon entry.
 `
 
 func main() {
@@ -198,8 +201,11 @@ func doctor(args []string) error {
 	}
 
 	mode := "installed"
-	if loc.Portable {
+	switch {
+	case loc.Portable:
 		mode = "portable"
+	case loc.Dev:
+		mode = "development"
 	}
 
 	fmt.Printf("version       %s\n", mcpserver.Version)
@@ -276,6 +282,9 @@ func installCmd(args []string) error {
 		return fmt.Errorf("this is a portable copy (%s is present) — remove that file first if you want to install",
 			config.PortableMarker)
 	}
+	if err := refuseInDev(loc); err != nil {
+		return err
+	}
 
 	scope := install.User
 	if *machine {
@@ -317,6 +326,17 @@ func installCmd(args []string) error {
 
 	fmt.Printf("\nWire it into an agent with:\n\n    claude mcp add mnemosyne -- mnemosyne serve\n")
 	return nil
+}
+
+// refuseInDev blocks the commands that leave something behind on the machine.
+// A development run is meant to be invisible to the installed copy: it must
+// never overwrite the installed binary, take over its PATH entry, or register
+// itself to start at logon.
+func refuseInDev(loc config.Locations) error {
+	if !loc.Dev {
+		return nil
+	}
+	return fmt.Errorf("%s=1 — a development build does not install itself or start at logon; unset it to install the real one", config.EnvDev)
 }
 
 func uninstallCmd(args []string) error {

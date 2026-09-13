@@ -37,11 +37,11 @@ type Address struct {
 	Endpoint string
 }
 
-// Resolve returns the address for a runtime directory. portable copies get
-// their own endpoint so that an installed daemon and a portable one on the same
-// machine do not fight over one name.
-func Resolve(runtimeDir string, portable bool) (Address, error) {
-	endpoint, err := endpoint(runtimeDir, portable)
+// Resolve returns the address for a runtime directory. Portable and
+// development copies get their own endpoint so that an installed daemon and a
+// second one on the same machine do not fight over one name.
+func Resolve(runtimeDir string, isolated bool) (Address, error) {
+	endpoint, err := endpoint(runtimeDir, isolated)
 	if err != nil {
 		return Address{}, err
 	}

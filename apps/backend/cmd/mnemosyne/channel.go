@@ -22,6 +22,7 @@ type channelInfo struct {
 	Token     string `json:"token,omitempty"`
 	Root      string `json:"root"`
 	Portable  bool   `json:"portable"`
+	Dev       bool   `json:"dev"`
 	Running   bool   `json:"running"`
 }
 
@@ -37,7 +38,7 @@ func channelCmd(args []string) error {
 		return err
 	}
 
-	addr, err := channel.Resolve(loc.RuntimeDir, loc.Portable)
+	addr, err := channel.Resolve(loc.RuntimeDir, loc.Isolated())
 	if err != nil {
 		return err
 	}
@@ -53,6 +54,7 @@ func channelCmd(args []string) error {
 		Token:     token,
 		Root:      root,
 		Portable:  loc.Portable,
+		Dev:       loc.Dev,
 	}
 	if _, err := probeDaemon(addr); err == nil {
 		info.Running = true

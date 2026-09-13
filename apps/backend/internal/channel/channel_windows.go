@@ -14,7 +14,7 @@ import (
 // endpoint is a named pipe under the per-user namespace. A pipe has no
 // directory permissions to inherit, so the owner goes in the name and the
 // access control goes in the DACL below.
-func endpoint(runtimeDir string, portable bool) (string, error) {
+func endpoint(runtimeDir string, isolated bool) (string, error) {
 	u, err := user.Current()
 	if err != nil {
 		return "", fmt.Errorf("identify the current user: %w", err)
@@ -23,9 +23,9 @@ func endpoint(runtimeDir string, portable bool) (string, error) {
 	// Username, not SID: the pipe name is something a person reads in an error
 	// message. The SID does the actual access control.
 	name := "mnemosyne." + sanitise(u.Username)
-	if portable {
-		// Two portable copies in different folders are two independent
-		// installations and must not share one pipe.
+	if isolated {
+		// A portable copy in its own folder, or a development checkout, is an
+		// independent installation and must not share the installed pipe.
 		sum := sha256.Sum256([]byte(runtimeDir))
 		name += "." + hex.EncodeToString(sum[:4])
 	}
